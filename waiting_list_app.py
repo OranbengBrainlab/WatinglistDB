@@ -41,8 +41,8 @@ def calculate_statistics(data_store, facility=None, branch=None):
                 continue
             filtered = people
             avg_wait = None
-            if filtered and "date" in filtered[0]:
-                dates = [datetime.strptime(p["date"], "%Y-%m-%d") for p in filtered if p.get("date")]
+            if filtered and "תאריך" in filtered[0]:
+                dates = [datetime.strptime(p["תאריך"], "%Y-%m-%d") for p in filtered if p.get("תאריך")]
                 if dates:
                     days = [(datetime.today() - d).days for d in dates]
                     avg_wait = sum(days) / len(days)
@@ -51,7 +51,7 @@ def calculate_statistics(data_store, facility=None, branch=None):
                 "branch": br,
                 "count": len(filtered),
                 "avg_wait": avg_wait if avg_wait is not None else 0,
-                "dates": [p["date"] for p in filtered if p.get("date")]
+                "dates": [p["תאריך"] for p in filtered if p.get("תאריך")]
             })
     return stats
 
@@ -69,7 +69,6 @@ FACILITY_BRANCHES = {
 #    "שרון": ["נתניה", "עמק_חפר", "הכל"],
 #    "ירושלים": ["מרכז", "מבשרת", "הכל"]
 # }
-# DataType = "Google drive"
 DataType = "Excel"
 
 
@@ -84,7 +83,7 @@ def add_to_waitlist(data_store: Dict[str, Dict[str, List[str]]], name: str, faci
     # This function will now expect a dict for person data
     if isinstance(name, dict):
         person = name
-        if not person.get("name", "").strip():
+        if not person.get("שם מלא", "").strip():
             return False
         data_store[facility][branch].append(person)
         return True
@@ -92,7 +91,7 @@ def add_to_waitlist(data_store: Dict[str, Dict[str, List[str]]], name: str, faci
         name = name.strip()
         if not name:
             return False
-        data_store[facility][branch].append({"name": name})
+        data_store[facility][branch].append({"שם מלא": name})
         return True
 
 def get_waitlist(data_store: Dict[str, Dict[str, List[str]]], facility: str, branch: str) -> List[str]:
@@ -114,37 +113,14 @@ def load_waiting_list_from_excel(file_path: str, facility: str, branches: list) 
         if branch in xl.sheet_names:
             df = xl.parse(branch)
             # Convert each row to dict, skip empty names
-            people = [row for row in df.to_dict(orient="records") if str(row.get("name", "")).strip()]
+            people = [row for row in df.to_dict(orient="records") if str(row.get("שם מלא", "")).strip()]
             branch_data[branch] = people
         else:
             branch_data[branch] = []
     return branch_data
 
 
-if DataType ==  "Google drive":    
-    CREDS_JSON_PATH = "credentials/service_account.json"
-    SHEET_ID = "17dHYU80oPg8PhH586AOinuFWSMsLpXQD"
-    FACILITY = "גוש דן"
-    BRANCH_GIDS = {
-     	"תל אביב": "732546362",      # Replace with actual gid for Tel Aviv tab
-     	"רמת גן - גבעתיים": "1227991176",
-        "בקעת אונו": "969356485", 
-        "הרצליה - רמת השרון": "235834184",
-        "חולון - בת ים": "1402390217",
-        "להטבק": "1040400252",
-        "טראומה מורכבת": "976592902",
-        "דרי רחוב": "1771885286"
-    }
-    if "waiting_lists" not in st.session_state:
-         loader = WaitingListDataLoaderClass(add_to_waitlist)
-         try:
-             store = loader.read_google_sheet_to_data_store(SHEET_ID, FACILITY, BRANCH_GIDS)
-         except Exception as e:
-             st.warning(f"Could not load Excel data: {e}")
-         st.session_state["waiting_lists"] = store
-
-    data_store = st.session_state["waiting_lists"]
-elif DataType == "Excel":
+if DataType == "Excel":
     excel_path = "Data/waiting_list_gush_dan.xlsx"
     if "waiting_lists" not in st.session_state:
         loader = WaitingListDataLoaderClass(add_to_waitlist)
@@ -213,10 +189,10 @@ with st.sidebar:
         ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📊 סטטיסטיקה ודוחות"],
         index=0
     )
-    st.markdown("---")
-    debug_mode = st.checkbox("🐛 Debug Mode", value=False)
-    if debug_mode and logged_in:
-        show_debug_panel()
+#    st.markdown("---")
+#    debug_mode = st.checkbox("🐛 Debug Mode", value=False)
+#    if debug_mode and logged_in:
+#        show_debug_panel()
 
 if sidebar_choice == "🏠 דף בית":
     # Logo moved to sidebar
@@ -228,7 +204,7 @@ if sidebar_choice == "🏠 דף בית":
         with st.form("login_form"):
             username = st.text_input("שם משתמש")
             password = st.text_input("סיסמה", type="password")
-            login_btn = st.form_submit_button("התחבר")
+            login_btn = st.form_submit_button("התחבר/י")
             if login_btn:
                 if check_login(username, password):
                     st.success(f"ברוך הבא, {username}!")
@@ -247,9 +223,9 @@ if sidebar_choice == "📋 רשימת המתנה":
     st.header("רשימת המתנה")
     col1, col2 = st.columns(2)
     with col1:
-        facility = st.selectbox("בחר מרחב", FACILITIES, key="view_facility")
+        facility = st.selectbox("בחר/י מרחב", FACILITIES, key="view_facility")
     with col2:
-        branch = st.selectbox("בחר סניף", FACILITY_BRANCHES[facility], key="view_branch")
+        branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="view_branch")
     st.subheader(f"רשימת המתנה עבור {facility} - {branch}")
 
     if branch == "הכל":
@@ -268,21 +244,21 @@ if sidebar_choice == "📋 רשימת המתנה":
         df.index += 1
 
         def highlight_yes(row):
-            yes_fields = ["resident", "special_needs", "first_time", "urgent", "willing_to_wait"]
+            yes_fields = ["אישור ועדה", "דוח פסיכיאטרי", "דוח פסיכוסוציאלי", "דוח רפואי", "צילום תז"]
             if all(row.get(f) == "כן" for f in yes_fields):
                 return ["background-color: lightgreen"] * len(row)
             return [""] * len(row)
 
         styled_df = df.style.apply(highlight_yes, axis=1)
 
-        # Add Google Maps link column if 'address' exists
-        if 'address' in df.columns:
+        # Add Google Maps link column if 'כתובת' exists
+        if 'כתובת' in df.columns:
             st.dataframe(styled_df)
             st.markdown('---')
             st.subheader('תראה את הכתובת על המפה')
-            addresses = [a for a in df['address'] if a]
-            selected_address = st.selectbox('בחר כתובת להציג על המפה', addresses)
-            if st.button('הצג על המפה'):
+            addresses = [a for a in df['כתובת'] if a]
+            selected_address = st.selectbox('בחר/י כתובת להציג על המפה', addresses)
+            if st.button('הצג/י על המפה'):
                 map_url = f"https://www.google.com/maps/search/{selected_address.replace(' ', '+')}"
                 st.markdown(f"[Open in Google Maps]({map_url})", unsafe_allow_html=True)
         else:
@@ -290,14 +266,14 @@ if sidebar_choice == "📋 רשימת המתנה":
 
         # Delete person functionality
         st.markdown("---")
-        st.markdown("### הוצא משתקם מהרשימת ההמתנה")
+        st.markdown("### להוציא משתקם מהרשימת ההמתנה")
         if len(df) > 0:
-            person_names = [str(p.get("name", "")) for p in waiting_list]
-            selected_person = st.selectbox("בחר משתקם להסרה", person_names)
-            if st.button("❌ הוצא משתקם"):
+            person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+            selected_person = st.selectbox("בחר/י משתקם להסרה", person_names)
+            if st.button("❌ להסיר משתקם"):
                 # Remove first matching person
                 for i, p in enumerate(waiting_list):
-                    if str(p.get("name", "")) == selected_person:
+                    if str(p.get("שם מלא", "")) == selected_person:
                         del waiting_list[i]
                         st.success(f"Removed {selected_person} from the waiting list.")
                         st.rerun()
@@ -307,69 +283,75 @@ if sidebar_choice == "📋 רשימת המתנה":
 
     # Save Changes button for Gush_Dan branches
     if facility == "גוש דן":
-        if st.button("💾 שמור את השינויים"):
+        if st.button("💾 שמור/י את השינויים"):
             loader = WaitingListDataLoaderClass(add_to_waitlist)
-            if DataType == "Google drive":
-                loader.write_to_google_sheet(data_store, facility, SHEET_ID, FACILITY_BRANCHES, CREDS_JSON_PATH)
-            elif DataType == "Excel":
-                xl_path = excel_path
-                loader.write_to_excel(data_store, facility, xl_path, FACILITY_BRANCHES["גוש דן"])
-            st.success("Changes saved to Excel file!")
+            if DataType == "Excel":
+                loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES["גוש דן"])
+            st.success("!השינויים נשמרו בהצלחה")
 
 elif sidebar_choice == "➕ הוספת משתקם":
 
     st.header("הוספת משתקם לרשימת ההמתנה")
     col1, col2 = st.columns(2)
     with col1:
-        facility_q = st.selectbox("בחר מרחב", FACILITIES, key="add_facility")
+        facility_q = st.selectbox("בחר/י מרחב", FACILITIES, key="add_facility")
     with col2:
         branches_no_all = [b for b in FACILITY_BRANCHES[facility_q] if b != "הכל"]
-        branch_q = st.selectbox("בחר סניף", branches_no_all, key="add_branch")
+        branch_q = st.selectbox("בחר/י סניף", branches_no_all, key="add_branch")
     from datetime import date
     # Questionnaire inputs (outside the form for immediate checkmark update)
-    name = st.text_input("הוסף את שם המשתקם", max_chars=50)
-    selected_date = st.date_input("בחר תאריך הוספה", value=date.today())
-    address = st.text_input("הוסף כתובת", max_chars=100)
-    st.markdown("**:בבקשה תמלא את השאלון הבא**")
+    שם_מלא = st.text_input("הוסף/י את שם המשתקם", max_chars=50)
+    תאריך = st.date_input("בחר/י תאריך הוספה", value=date.today())
+    כתובת = st.text_input("הוסף/י כתובת", max_chars=100)
+    גורם_מפנה = st.text_input("הוסף/י גורם מפנה", max_chars=100)
+    st.markdown("**:בבקשה תמלא/י את השאלון הבא**")
     q1 = st.radio("אישור ועדה", ["כן", "לא"], index=1, horizontal=True)
     q2 = st.radio("דוח פסיכיאטרי עדכני", ["כן", "לא"], index=1, horizontal=True)
     q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=1, horizontal=True)
     q4 = st.radio("דוח רפואי", ["כן", "לא"], index=1, horizontal=True)
     q5 = st.radio("צילום תעודת זהות", ["כן", "לא"], index=1, horizontal=True)
+    comments = st.text_area("הערות נוספות", max_chars=200)
     # Show checkmark if all answers are 'כן' (immediately after questions)
     show_check = all([q1 == "כן", q2 == "כן", q3 == "כן", q4 == "כן", q5 == "כן"])
     if show_check:
         st.markdown("<div style='text-align:center'><span style='font-size:2em;color:green'>&#10003;</span></div>", unsafe_allow_html=True)
     # Form for submission only
     with st.form("add_form", clear_on_submit=True):
-        submitted = st.form_submit_button("הוסף משתקם לרשימת ההמתנה")
+        submitted = st.form_submit_button("הוספת משתקם לרשימת ההמתנה")
         if submitted:
             # Ensure date is saved as YYYY-MM-DD string
-            date_str = selected_date.strftime("%Y-%m-%d") if hasattr(selected_date, "strftime") else str(selected_date)
+            date_str = תאריך.strftime("%Y-%m-%d") if hasattr(תאריך, "strftime") else str(תאריך)
             person = {
-                "name": name,
-                "date": date_str,
-                "address": address,
-                "resident": q1,
-                "special_needs": q2,
-                "first_time": q3,
-                "urgent": q4,
-                "willing_to_wait": q5
+                "שם מלא": שם_מלא,
+                "תאריך": date_str,
+                "כתובת": כתובת,
+                "גורם מפנה": גורם_מפנה,
+                "אישור ועדה": q1,
+                "דוח פסיכיאטרי": q2,
+                "דוח פסיכוסוציאלי": q3,
+                "דוח רפואי": q4,
+                "צילום תז": q5,
+                "הערות": comments
             }
-            if not name.strip():
+            if not שם_מלא.strip():
                 st.error("Name cannot be empty.")
             else:
+                loader = WaitingListDataLoaderClass(add_to_waitlist)
+                store = loader.read_excel_to_data_store(excel_path,"גוש דן",FACILITY_BRANCHES["גוש דן"])
+                st.session_state["waiting_lists"] = store
+                data_store = st.session_state["waiting_lists"]
                 add_to_waitlist(st.session_state["waiting_lists"], person, facility_q, branch_q)
-                st.success(f"Added {name} to {facility_q} - {branch_q} waiting list.")
+                loader.write_to_excel(data_store, "גוש דן", excel_path, FACILITY_BRANCHES["גוש דן"])
+                st.success(f"Added {שם_מלא} to {facility_q} - {branch_q} waiting list.")
                 st.toast("המשתקם נוסף בהצלחה!", icon="✅")
 
 elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
     st.markdown("## 📊 סטטיסטיקה ודוחות")
     col1, col2 = st.columns(2)
     with col1:
-        facility = st.selectbox("בחר מרחב", FACILITIES, key="stats_facility")
+        facility = st.selectbox("בחר/י מרחב", FACILITIES, key="stats_facility")
     with col2:
-        branch = st.selectbox("בחר סניף", FACILITY_BRANCHES[facility], key="stats_branch")
+        branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="stats_branch")
     stats = calculate_statistics(data_store, facility, None if branch == "הכל" else branch)
     # --- Total statistics ---
     # Gather all people for selected facility/branch
@@ -385,11 +367,11 @@ elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
     total_yes_all = sum(
         1 for p in all_people
         if isinstance(p, dict) and all([
-            p.get("resident") == "כן",
-            p.get("special_needs") == "כן",
-            p.get("first_time") == "כן",
-            p.get("urgent") == "כן",
-            p.get("willing_to_wait") == "כן"
+            p.get("אישור ועדה") == "כן",
+            p.get("דוח פסיכיאטרי") == "כן",
+            p.get("דוח פסיכוסוציאלי") == "כן",
+            p.get("דוח רפואי") == "כן",
+            p.get("צילום תז") == "כן"
         ])
     )
     col1, col2 = st.columns(2)
@@ -443,10 +425,10 @@ elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
         for s in stats:
             all_dates.extend(s["dates"])
         if all_dates:
-            df_dates = pd.DataFrame({"date": all_dates})
-            df_dates["date"] = pd.to_datetime(df_dates["date"])
-            df_dates["day"] = df_dates["date"].dt.date
-            df_dates["month"] = df_dates["date"].dt.to_period("M")
+            df_dates = pd.DataFrame({"תאריך": all_dates})
+            df_dates["תאריך"] = pd.to_datetime(df_dates["תאריך"])
+            df_dates["day"] = df_dates["תאריך"].dt.date
+            df_dates["month"] = df_dates["תאריך"].dt.to_period("M")
             day_counts = df_dates.groupby("day").size().reset_index(name="count")
             month_counts = df_dates.groupby("month").size().reset_index(name="count")
             # Convert month to string for Altair axis

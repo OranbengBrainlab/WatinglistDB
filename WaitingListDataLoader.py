@@ -79,7 +79,7 @@ class WaitingListDataLoaderClass:
 		try:
 			xl = pd.ExcelFile(excel_path)
 			for branch in branches:
-				if branch == "See all":
+				if branch == "הכל":
 					continue
 				sheet_name = None
 				for s in xl.sheet_names:
@@ -90,7 +90,7 @@ class WaitingListDataLoaderClass:
 					df = xl.parse(sheet_name)
 					name_col = None
 					for col in df.columns:
-						if str(col).strip().lower() in ["name", "שם", "full name", "fullname"]:
+						if str(col).strip().lower() in ["שם", "שם מלא", "full name", "fullname"]:
 							name_col = col
 							break
 					if not name_col:
@@ -98,7 +98,7 @@ class WaitingListDataLoaderClass:
 					for row in df.to_dict(orient="records"):
 						if str(row.get(name_col, "")).strip():
 							person = dict(row)
-							person["name"] = str(row.get(name_col, "")).strip()
+							person["שם מלא"] = str(row.get(name_col, "")).strip()
 							if self.add_to_waitlist:
 								self.add_to_waitlist(data_store, person, facility, branch)
 							else:
@@ -113,7 +113,7 @@ class WaitingListDataLoaderClass:
 		"""
 		with pd.ExcelWriter(excel_path, engine="openpyxl", mode="w") as writer:
 			for b in branches:
-				if b == "See all":
+				if b == "הכל":
 					continue
 				branch_list = data_store[facility][b]
 				if branch_list:
@@ -125,19 +125,23 @@ class WaitingListDataLoaderClass:
 # Example usage:
 if __name__ == "__main__":
 	# Example for Google Sheets
-	SHEET_ID = "11HkEhjdNYUGxrO1Y1bN2qmqBnStA8raq"
+	# SHEET_ID = "11HkEhjdNYUGxrO1Y1bN2qmqBnStA8raq"
 	FACILITY = "Gush_Dan"
 	BRANCH_GIDS = {
 		"Tel Aviv": "292505320",      # Replace with actual gid for Tel Aviv tab
 		"Ramat Gan": "809260774"   # Replace with actual gid for Ramat Gan tab
 	}
 	loader = WaitingListDataLoaderClass()
-	data_store_gs = loader.read_google_sheet_to_data_store(SHEET_ID, FACILITY, BRANCH_GIDS)
-	print("Google Sheets Data Store:", data_store_gs)
+	# data_store_gs = loader.read_google_sheet_to_data_store(SHEET_ID, FACILITY, BRANCH_GIDS)
+	# print("Google Sheets Data Store:", data_store_gs)
 
 	# Example for Excel
 	EXCEL_PATH = "Data/waiting_list_gush_dan.xlsx"
-	BRANCHES = ["Tel Aviv", "Ramat Gan"]
+	FACILITIES = ["גוש דן"]
+	# Branches per facility
+	FACILITY_BRANCHES = {
+	    "גוש דן": ["הכל", "תל אביב", "רמת גן - גבעתיים", "בקעת אונו", "הרצליה - רמת השרון", "חולון - בת ים","להטבק", "טראומה מורכבת","דרי רחוב"]}
+	BRANCHES = FACILITY_BRANCHES[FACILITIES[0]]
 	data_store_excel = loader.read_excel_to_data_store(EXCEL_PATH, FACILITY, BRANCHES)
 	print("Excel Data Store:", data_store_excel)
     
