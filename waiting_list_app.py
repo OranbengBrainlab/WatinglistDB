@@ -140,7 +140,7 @@ if DataType == "Excel":
 # --- User Authentication ---
 VALID_USERS = {
     "admin": "admin",
-    "user1": "pass1",
+    "Tal": "Tal",
     "user2": "pass2"
 }
 
@@ -186,9 +186,57 @@ with st.sidebar:
     st.image("Images/Logo.jpg", width=720)
     sidebar_choice = st.radio(
         "",
-        ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📊 סטטיסטיקה ודוחות"],
+        ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📝 עריכת משתקם", "📊 סטטיסטיקה ודוחות"],
         index=0
     )
+if sidebar_choice == "📝 עריכת משתקם":
+    st.header("עריכת משתקם")
+    col1, col2 = st.columns(2)
+    with col1:
+            facility = st.selectbox("בחר/י מרחב", FACILITIES, key="edit_facility")
+    with col2:
+        branches_no_all = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
+        branch = st.selectbox("בחר/י סניף", branches_no_all, key="edit_branch", index=None, placeholder="בחר/י סניף")
+    if branch == None:
+        st.info("אין משתקמים לעריכה בסניף זה.")
+    else:
+        waiting_list = get_waitlist(data_store, facility, branch)
+        person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+        selected_person_name = st.selectbox("בחר/י משתקם לעריכה", person_names)
+        # Find the selected person
+        selected_person = None
+        for p in waiting_list:
+            if str(p.get("שם מלא", "")) == selected_person_name:
+                selected_person = p
+                break
+        if selected_person:
+            # Editable fields
+            new_name = st.text_input("שם מלא", value=selected_person.get("שם מלא", ""))
+            new_date = st.date_input("תאריך", value=selected_person.get("תאריך", ""))
+            new_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""))
+            new_referrer = st.text_input("גורם מפנה", value=selected_person.get("גורם מפנה", ""))
+            new_q1 = st.radio("אישור ועדה", ["כן", "לא"], index=0 if selected_person.get("אישור ועדה") == "כן" else 1,horizontal=True)
+            new_q2 = st.radio("דוח פסיכיאטרי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכיאטרי") == "כן" else 1,horizontal=True)
+            new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1,horizontal=True)
+            new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1,horizontal=True)
+            new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1,horizontal=True)
+            new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
+            if st.button("שמור/י שינויים במשקם"):
+                selected_person["שם מלא"] = new_name
+                selected_person["תאריך"] = new_date
+                selected_person["כתובת"] = new_address
+                selected_person["גורם מפנה"] = new_referrer
+                selected_person["אישור ועדה"] = new_q1
+                selected_person["דוח פסיכיאטרי"] = new_q2
+                selected_person["דוח פסיכוסוציאלי"] = new_q3
+                selected_person["דוח רפואי"] = new_q4
+                selected_person["צילום תז"] = new_q5
+                selected_person["הערות"] = new_comments
+                # Save to Excel if Gush Dan
+                if facility == "גוש דן":
+                    loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
+                st.success("המשקם עודכן בהצלחה!")
 #    st.markdown("---")
 #    debug_mode = st.checkbox("🐛 Debug Mode", value=False)
 #    if debug_mode and logged_in:
@@ -288,7 +336,15 @@ if sidebar_choice == "📋 רשימת המתנה":
             if DataType == "Excel":
                 loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES["גוש דן"])
             st.success("!השינויים נשמרו בהצלחה")
-
+        # --- Admin-only Excel download ---
+        if logged_in == "admin":
+            with open(excel_path, "rb") as f:
+                st.download_button(
+                    label="הורד/י את קובץ האקסל",
+                    data=f,
+                    file_name="waiting_list_gush_dan.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 elif sidebar_choice == "➕ הוספת משתקם":
 
     st.header("הוספת משתקם לרשימת ההמתנה")
@@ -297,11 +353,11 @@ elif sidebar_choice == "➕ הוספת משתקם":
         facility_q = st.selectbox("בחר/י מרחב", FACILITIES, key="add_facility")
     with col2:
         branches_no_all = [b for b in FACILITY_BRANCHES[facility_q] if b != "הכל"]
-        branch_q = st.selectbox("בחר/י סניף", branches_no_all, key="add_branch")
+        branch_q = st.selectbox("בחר/י סניף", branches_no_all, key="add_branch", index=None, placeholder="בחר/י סניף")
     from datetime import date
     # Questionnaire inputs (outside the form for immediate checkmark update)
     שם_מלא = st.text_input("הוסף/י את שם המשתקם", max_chars=50)
-    תאריך = st.date_input("בחר/י תאריך הוספה", value=date.today())
+    תאריך = st.date_input("בחר/י תאריך הוספה", value=None)
     כתובת = st.text_input("הוסף/י כתובת", max_chars=100)
     גורם_מפנה = st.text_input("הוסף/י גורם מפנה", max_chars=100)
     st.markdown("**:בבקשה תמלא/י את השאלון הבא**")
@@ -334,7 +390,11 @@ elif sidebar_choice == "➕ הוספת משתקם":
                 "הערות": comments
             }
             if not שם_מלא.strip():
-                st.error("Name cannot be empty.")
+                st.error("נא לבחור שם")
+            elif branch_q == None:
+                st.error("נא לבחור סניף")
+            elif תאריך == None:
+                st.error("נא לבחור תאריך")
             else:
                 loader = WaitingListDataLoaderClass(add_to_waitlist)
                 store = loader.read_excel_to_data_store(excel_path,"גוש דן",FACILITY_BRANCHES["גוש דן"])
