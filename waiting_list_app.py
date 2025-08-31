@@ -215,11 +215,13 @@ if sidebar_choice == "📝 עריכת משתקם":
             new_date = st.date_input("תאריך", value=selected_person.get("תאריך", ""))
             new_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""))
             new_referrer = st.text_input("גורם מפנה", value=selected_person.get("גורם מפנה", ""))
-            new_q1 = st.radio("אישור ועדה", ["כן", "לא"], index=0 if selected_person.get("אישור ועדה") == "כן" else 1,horizontal=True)
-            new_q2 = st.radio("דוח פסיכיאטרי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכיאטרי") == "כן" else 1,horizontal=True)
-            new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1,horizontal=True)
-            new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1,horizontal=True)
-            new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1,horizontal=True)
+            # --- Add branch switcher ---
+            new_branch = st.selectbox("העבר/י לסניף אחר", branches_no_all, index=branches_no_all.index(branch))
+            new_q1 = st.radio("אישור ועדה", ["כן", "לא"], index=0 if selected_person.get("אישור ועדה") == "כן" else 1, horizontal=True)
+            new_q2 = st.radio("דוח פסיכיאטרי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכיאטרי") == "כן" else 1, horizontal=True)
+            new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1, horizontal=True)
+            new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1, horizontal=True)
+            new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1, horizontal=True)
             new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
             if st.button("שמור/י שינויים במשקם"):
                 selected_person["שם מלא"] = new_name
@@ -232,6 +234,10 @@ if sidebar_choice == "📝 עריכת משתקם":
                 selected_person["דוח רפואי"] = new_q4
                 selected_person["צילום תז"] = new_q5
                 selected_person["הערות"] = new_comments
+                # If branch changed, move person
+                if new_branch != branch:
+                    waiting_list.remove(selected_person)
+                    data_store[facility][new_branch].append(selected_person)
                 # Save to Excel if Gush Dan
                 if facility == "גוש דן":
                     loader = WaitingListDataLoaderClass(add_to_waitlist)
