@@ -146,7 +146,8 @@ VALID_USERS = {
     "admin": "admin",
     "user1": "pass1",
     "Tal": "Tal",
-    "user2": "pass2"
+    "user2": "pass2",
+    "test": "test"
 }
 
 def check_login(username, password):
