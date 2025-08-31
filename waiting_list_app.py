@@ -42,7 +42,11 @@ def calculate_statistics(data_store, facility=None, branch=None):
             filtered = people
             avg_wait = None
             if filtered and "תאריך" in filtered[0]:
-                dates = [datetime.strptime(p["תאריך"], "%Y-%m-%d") for p in filtered if p.get("תאריך")]
+                dates = [
+                    pd.to_datetime(p["תאריך"], errors="coerce")
+                    for p in filtered if p.get("תאריך")
+                ]
+                dates = [d for d in dates if pd.notnull(d)]
                 if dates:
                     days = [(datetime.today() - d).days for d in dates]
                     avg_wait = sum(days) / len(days)
@@ -223,11 +227,13 @@ if sidebar_choice == "📝 עריכת משתקם":
             new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1, horizontal=True)
             new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1, horizontal=True)
             new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
+            new_urgent = st.checkbox("?מקרה דחוף", value=selected_person.get("מקרה דחוף", False))
             if st.button("שמור/י שינויים במשקם"):
                 selected_person["שם מלא"] = new_name
                 selected_person["תאריך"] = new_date
                 selected_person["כתובת"] = new_address
                 selected_person["גורם מפנה"] = new_referrer
+                selected_person["מקרה דחוף"] = new_urgent
                 selected_person["אישור ועדה"] = new_q1
                 selected_person["דוח פסיכיאטרי"] = new_q2
                 selected_person["דוח פסיכוסוציאלי"] = new_q3
@@ -297,12 +303,15 @@ if sidebar_choice == "📋 רשימת המתנה":
         df = pd.DataFrame(waiting_list)
         df.index += 1
 
+        # Keep green check logic
         def highlight_yes(row):
             yes_fields = ["אישור ועדה", "דוח פסיכיאטרי", "דוח פסיכוסוציאלי", "דוח רפואי", "צילום תז"]
             if all(row.get(f) == "כן" for f in yes_fields):
                 return ["background-color: lightgreen"] * len(row)
             return [""] * len(row)
-
+        # Add urgent icon column if 'מקרה דחוף?' exists
+        if "מקרה דחוף" in df.columns:
+            df["מקרה דחוף"] = df["מקרה דחוף"].apply(lambda x: "🚨" if x in [True, "כן"] else "")
         styled_df = df.style.apply(highlight_yes, axis=1)
 
         # Add Google Maps link column if 'כתובת' exists
@@ -373,6 +382,7 @@ elif sidebar_choice == "➕ הוספת משתקם":
     q4 = st.radio("דוח רפואי", ["כן", "לא"], index=1, horizontal=True)
     q5 = st.radio("צילום תעודת זהות", ["כן", "לא"], index=1, horizontal=True)
     comments = st.text_area("הערות נוספות", max_chars=200)
+    מקרה_דחוף = st.checkbox("?מקרה דחוף", value=False)
     # Show checkmark if all answers are 'כן' (immediately after questions)
     show_check = all([q1 == "כן", q2 == "כן", q3 == "כן", q4 == "כן", q5 == "כן"])
     if show_check:
@@ -393,7 +403,8 @@ elif sidebar_choice == "➕ הוספת משתקם":
                 "דוח פסיכוסוציאלי": q3,
                 "דוח רפואי": q4,
                 "צילום תז": q5,
-                "הערות": comments
+                "הערות": comments,
+                "מקרה דחוף": מקרה_דחוף
             }
             if not שם_מלא.strip():
                 st.error("נא לבחור שם")
@@ -440,17 +451,25 @@ elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
             p.get("צילום תז") == "כן"
         ])
     )
-    col1, col2 = st.columns(2)
+    total_urgent_cases = sum(
+        1 for p in all_people
+        if isinstance(p, dict) and p.get("מקרה דחוף") is True
+    )
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(label="מספר משתקמים ברשימה", value=total_people)
     
     with col2:
         st.metric(label="מספר משתקמים שיש להם את כל הטפסים", value=total_yes_all)
-
+    with col3:
+        st.metric(label="מספר המקרים הדחופים", value=total_urgent_cases)
     if not stats:
         st.info("No data available for selected filters.")
     else:
         df_stats = pd.DataFrame(stats)
+        # Ensure 'dates' column is datetime
+        if "dates" in df_stats.columns:
+            df_stats["dates"] = pd.to_datetime(df_stats["dates"], errors="coerce")
         if branch == "הכל":
             # Number of people waiting per branch
             bar = alt.Chart(df_stats).mark_bar().encode(
@@ -467,10 +486,12 @@ elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
                 branch_name = s["branch"]
                 dates = s["dates"]
                 for d in dates:
-                    wait_days = (datetime.today() - datetime.strptime(d, "%Y-%m-%d")).days
+                    wait_days = (datetime.today() - datetime.strptime(d, "%Y-%m-%d")).days if isinstance(d, str) else (datetime.today() - d).days
                     box_data.append({"branch": branch_name, "wait_days": wait_days})
             df_box = pd.DataFrame(box_data)
+            # Ensure 'wait_days' is numeric
             if not df_box.empty:
+                df_box["wait_days"] = pd.to_numeric(df_box["wait_days"], errors="coerce")
                 # Calculate mean and median per branch
                 mean_df = df_box.groupby("branch", as_index=False)["wait_days"].mean()
                 mean_df["stat"] = "Mean"
