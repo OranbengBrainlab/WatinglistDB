@@ -144,6 +144,7 @@ if DataType == "Excel":
 # --- User Authentication ---
 VALID_USERS = {
     "admin": "admin",
+    "user1": "pass1",
     "Tal": "Tal",
     "user2": "pass2"
 }
