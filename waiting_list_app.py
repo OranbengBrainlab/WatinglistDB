@@ -14,8 +14,6 @@ Features:
 import streamlit as st
 from typing import Dict, List
 import pandas as pd
-import os
-import requests
 import time
 import altair as alt
 from datetime import datetime
@@ -290,8 +288,17 @@ if sidebar_choice == "📋 רשימת המתנה":
         branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="view_branch")
     st.subheader(f"רשימת המתנה עבור {facility} - {branch}")
 
+    # --- Advanced Search & Filter Controls ---
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    with filter_col1:
+        search_name = st.text_input("🔍 חפש/י לפי שם", value="", key="search_name")
+    with filter_col2:
+        filter_urgent = st.selectbox("🆘 הצג/י רק מקרים דחופים", ("מקרה דחוף", "מקרה לא דחוף"), index=None, placeholder="בחר/י סוג מקרה", key="filter_urgent")
+    with filter_col3:
+        filter_date = st.date_input("📅 הצג/י ממתינים מתאריך", value=None, key="filter_date")
+
+    # Get all people for selected branch/facility
     if branch == "הכל":
-        # Combine all branches for the selected facility
         all_people = []
         for b in FACILITY_BRANCHES[facility]:
             if b != "הכל":
@@ -300,10 +307,28 @@ if sidebar_choice == "📋 רשימת המתנה":
     else:
         waiting_list = get_waitlist(data_store, facility, branch)
 
+    # --- Apply Filters ---
+    filtered_list = waiting_list
+    if search_name:
+        filtered_list = [p for p in filtered_list if search_name.strip() in str(p.get("שם מלא", ""))]
+    if filter_urgent == "מקרה דחוף":
+        filtered_list = [p for p in filtered_list if p.get("מקרה דחוף") in [True, "כן"]]
+    elif filter_urgent == "מקרה לא דחוף":
+        filtered_list = [ p for p in filtered_list if p.get("מקרה דחוף") in [False, "לא", None, ""] or pd.isna(p.get("מקרה דחוף"))]
+    if filter_date:
+        # Only show people added on or after the selected date
+        try:
+            filter_date_str = filter_date.strftime("%Y-%m-%d") if hasattr(filter_date, "strftime") else str(filter_date)
+            filtered_list = [p for p in filtered_list if pd.to_datetime(p.get("תאריך", None), errors="coerce") >= pd.to_datetime(filter_date_str)]
+        except Exception:
+            pass
 
-    if waiting_list:
-        df = pd.DataFrame(waiting_list)
+    if filtered_list:
+        df = pd.DataFrame(filtered_list)
         df.index += 1
+        # Ensure 'תאריך' column is string for Arrow compatibility
+        if 'תאריך' in df.columns:
+            df['תאריך'] = df['תאריך'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x))
 
         # Keep green check logic
         def highlight_yes(row):
