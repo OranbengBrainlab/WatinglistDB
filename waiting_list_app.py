@@ -19,43 +19,6 @@ import altair as alt
 from datetime import datetime
 from WaitingListDataLoader import WaitingListDataLoaderClass
 
-# --- Statistics Function ---
-def calculate_statistics(data_store, facility=None, branch=None):
-    """
-    Returns a list of dicts with statistics for each branch:
-    - facility: facility name
-    - branch: branch name
-    - count: number of people waiting
-    - avg_wait: average waiting time in days
-    - dates: list of dates for occupancy trends
-    """
-    stats = []
-    facilities = [facility] if facility else FACILITIES
-    for fac in facilities:
-        branches = [branch] if branch else [b for b in FACILITY_BRANCHES[fac] if b != "הכל"]
-        for br in branches:
-            people = get_waitlist(data_store, fac, br)
-            if not people:
-                continue
-            filtered = people
-            avg_wait = None
-            if filtered and "תאריך" in filtered[0]:
-                dates = [
-                    pd.to_datetime(p["תאריך"], errors="coerce")
-                    for p in filtered if p.get("תאריך")
-                ]
-                dates = [d for d in dates if pd.notnull(d)]
-                if dates:
-                    days = [(datetime.today() - d).days for d in dates]
-                    avg_wait = sum(days) / len(days)
-            stats.append({
-                "facility": fac,
-                "branch": br,
-                "count": len(filtered),
-                "avg_wait": avg_wait if avg_wait is not None else 0,
-                "dates": [p["תאריך"] for p in filtered if p.get("תאריך")]
-            })
-    return stats
 
 # --- Configuration ---
 FACILITIES = ["גוש דן"]
@@ -100,10 +63,43 @@ def get_waitlist(data_store: Dict[str, Dict[str, List[str]]], facility: str, bra
     """Get the waiting list for a facility and branch."""
     return data_store[facility][branch]
 
-# --- Streamlit UI ---
-
-
-st.set_page_config(page_title="Waiting List Manager", layout="centered")
+# --- Statistics Function ---
+def calculate_statistics(data_store, facility=None, branch=None):
+    """
+    Returns a list of dicts with statistics for each branch:
+    - facility: facility name
+    - branch: branch name
+    - count: number of people waiting
+    - avg_wait: average waiting time in days
+    - dates: list of dates for occupancy trends
+    """
+    stats = []
+    facilities = [facility] if facility else FACILITIES
+    for fac in facilities:
+        branches = [branch] if branch else [b for b in FACILITY_BRANCHES[fac] if b != "הכל"]
+        for br in branches:
+            people = get_waitlist(data_store, fac, br)
+            if not people:
+                continue
+            filtered = people
+            avg_wait = None
+            if filtered and "תאריך" in filtered[0]:
+                dates = [
+                    pd.to_datetime(p["תאריך"], errors="coerce")
+                    for p in filtered if p.get("תאריך")
+                ]
+                dates = [d for d in dates if pd.notnull(d)]
+                if dates:
+                    days = [(datetime.today() - d).days for d in dates]
+                    avg_wait = sum(days) / len(days)
+            stats.append({
+                "facility": fac,
+                "branch": br,
+                "count": len(filtered),
+                "avg_wait": avg_wait if avg_wait is not None else 0,
+                "dates": [p["תאריך"] for p in filtered if p.get("תאריך")]
+            })
+    return stats
 
 def load_waiting_list_from_excel(file_path: str, facility: str, branches: list) -> Dict[str, List[dict]]:
     """Load waiting list data from Excel file for a facility and its branches."""
@@ -120,6 +116,10 @@ def load_waiting_list_from_excel(file_path: str, facility: str, branches: list) 
         else:
             branch_data[branch] = []
     return branch_data
+# --- Streamlit UI ---
+
+
+st.set_page_config(page_title="Waiting List Manager", layout="centered")
 
 
 if DataType == "Excel":
@@ -155,7 +155,6 @@ def check_login(username, password):
 
 
 def show_debug_panel():
-    """Display debug information panel (Session State, Data, Module Status)."""
     st.markdown("### 🐛 Debug Information")
     # Session State Debug
     with st.expander("📊 Session State", expanded=False):
@@ -188,71 +187,13 @@ logged_in = st.session_state.get("logged_in_user")
 
 with st.sidebar:
     st.image("Images/Logo.jpg", width=720)
+    st.markdown('---')
+
     sidebar_choice = st.radio(
         "",
-        ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📝 עריכת משתקם", "📊 סטטיסטיקה ודוחות"],
+        ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📝 עריכת משתקם", "✅ מתקבלים", "📊 סטטיסטיקה ודוחות"],
         index=0
     )
-if sidebar_choice == "📝 עריכת משתקם":
-    st.header("עריכת משתקם")
-    col1, col2 = st.columns(2)
-    with col1:
-            facility = st.selectbox("בחר/י מרחב", FACILITIES, key="edit_facility")
-    with col2:
-        branches_no_all = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
-        branch = st.selectbox("בחר/י סניף", branches_no_all, key="edit_branch", index=None, placeholder="בחר/י סניף")
-    if branch == None:
-        st.info("אין משתקמים לעריכה בסניף זה.")
-    else:
-        waiting_list = get_waitlist(data_store, facility, branch)
-        person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
-        selected_person_name = st.selectbox("בחר/י משתקם לעריכה", person_names)
-        # Find the selected person
-        selected_person = None
-        for p in waiting_list:
-            if str(p.get("שם מלא", "")) == selected_person_name:
-                selected_person = p
-                break
-        if selected_person:
-            # Editable fields
-            new_name = st.text_input("שם מלא", value=selected_person.get("שם מלא", ""))
-            new_date = st.date_input("תאריך", value=selected_person.get("תאריך", ""))
-            new_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""))
-            new_referrer = st.text_input("גורם מפנה", value=selected_person.get("גורם מפנה", ""))
-            # --- Add branch switcher ---
-            new_branch = st.selectbox("העבר/י לסניף אחר", branches_no_all, index=branches_no_all.index(branch))
-            new_q1 = st.radio("אישור ועדה", ["כן", "לא"], index=0 if selected_person.get("אישור ועדה") == "כן" else 1, horizontal=True)
-            new_q2 = st.radio("דוח פסיכיאטרי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכיאטרי") == "כן" else 1, horizontal=True)
-            new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1, horizontal=True)
-            new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1, horizontal=True)
-            new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1, horizontal=True)
-            new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
-            new_urgent = st.checkbox("?מקרה דחוף", value=selected_person.get("מקרה דחוף", False))
-            if st.button("שמור/י שינויים במשקם"):
-                selected_person["שם מלא"] = new_name
-                selected_person["תאריך"] = new_date
-                selected_person["כתובת"] = new_address
-                selected_person["גורם מפנה"] = new_referrer
-                selected_person["מקרה דחוף"] = new_urgent
-                selected_person["אישור ועדה"] = new_q1
-                selected_person["דוח פסיכיאטרי"] = new_q2
-                selected_person["דוח פסיכוסוציאלי"] = new_q3
-                selected_person["דוח רפואי"] = new_q4
-                selected_person["צילום תז"] = new_q5
-                selected_person["הערות"] = new_comments
-                # If branch changed, move person
-                if new_branch != branch:
-                    waiting_list.remove(selected_person)
-                    data_store[facility][new_branch].append(selected_person)
-                # Save to Excel if Gush Dan
-                if facility == "גוש דן":
-                    loader = WaitingListDataLoaderClass(add_to_waitlist)
-                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
-                st.success("המשקם עודכן בהצלחה!")
-#    st.markdown("---")
-#    debug_mode = st.checkbox("🐛 Debug Mode", value=False)
-#    if debug_mode and logged_in:
-#        show_debug_panel()
 
 if sidebar_choice == "🏠 דף בית":
     # Logo moved to sidebar
@@ -275,19 +216,30 @@ if sidebar_choice == "🏠 דף בית":
         st.success(f"אתה מחובר כ-{logged_in}.")
 
 if sidebar_choice != "🏠 דף בית" and not logged_in:
-    st.warning("Please log in to access the app features.")
+    st.warning("אנא התחבר/י למערכת")
     st.stop()
 
-if sidebar_choice == "📋 רשימת המתנה":
-
+elif sidebar_choice == "📋 רשימת המתנה":
     st.header("רשימת המתנה")
+    excel_path = "Data/waiting_list_gush_dan.xlsx"
+    if "waiting_lists" not in st.session_state:
+        loader = WaitingListDataLoaderClass(add_to_waitlist)
+        try:
+            store = loader.read_excel_to_data_store(
+                excel_path,
+                "גוש דן",
+                FACILITY_BRANCHES["גוש דן"]
+            )
+        except Exception as e:
+            st.warning(f"Could not load Excel data: {e}")
+        st.session_state["waiting_lists"] = store
+    data_store = st.session_state["waiting_lists"]
     col1, col2 = st.columns(2)
     with col1:
         facility = st.selectbox("בחר/י מרחב", FACILITIES, key="view_facility")
     with col2:
         branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="view_branch")
     st.subheader(f"רשימת המתנה עבור {facility} - {branch}")
-
     # --- Advanced Search & Filter Controls ---
     filter_col1, filter_col2, filter_col3 = st.columns(3)
     with filter_col1:
@@ -296,7 +248,6 @@ if sidebar_choice == "📋 רשימת המתנה":
         filter_urgent = st.selectbox("🆘 הצג/י רק מקרים דחופים", ("מקרה דחוף", "מקרה לא דחוף"), index=None, placeholder="בחר/י סוג מקרה", key="filter_urgent")
     with filter_col3:
         filter_date = st.date_input("📅 הצג/י ממתינים מתאריך", value=None, key="filter_date")
-
     # Get all people for selected branch/facility
     if branch == "הכל":
         all_people = []
@@ -306,7 +257,6 @@ if sidebar_choice == "📋 רשימת המתנה":
         waiting_list = all_people
     else:
         waiting_list = get_waitlist(data_store, facility, branch)
-
     # --- Apply Filters ---
     filtered_list = waiting_list
     if search_name:
@@ -322,14 +272,12 @@ if sidebar_choice == "📋 רשימת המתנה":
             filtered_list = [p for p in filtered_list if pd.to_datetime(p.get("תאריך", None), errors="coerce") >= pd.to_datetime(filter_date_str)]
         except Exception:
             pass
-
     if filtered_list:
         df = pd.DataFrame(filtered_list)
         df.index += 1
         # Ensure 'תאריך' column is string for Arrow compatibility
         if 'תאריך' in df.columns:
             df['תאריך'] = df['תאריך'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x))
-
         # Keep green check logic
         def highlight_yes(row):
             yes_fields = ["אישור ועדה", "דוח פסיכיאטרי", "דוח פסיכוסוציאלי", "דוח רפואי", "צילום תז"]
@@ -340,7 +288,6 @@ if sidebar_choice == "📋 רשימת המתנה":
         if "מקרה דחוף" in df.columns:
             df["מקרה דחוף"] = df["מקרה דחוף"].apply(lambda x: "🚨" if x in [True, "כן"] else "")
         styled_df = df.style.apply(highlight_yes, axis=1)
-
         # Add Google Maps link column if 'כתובת' exists
         if 'כתובת' in df.columns:
             st.dataframe(styled_df)
@@ -353,7 +300,72 @@ if sidebar_choice == "📋 רשימת המתנה":
                 st.markdown(f"[Open in Google Maps]({map_url})", unsafe_allow_html=True)
         else:
             st.dataframe(styled_df)
-
+            # --- Shift person to accepted list ---
+        st.markdown("### העבר/י משתקם לרשימת המתקבלים")
+        if len(df) > 0:
+            person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+            selected_person = st.selectbox("בחר/י משתקם להעברה לרשימת המתקבלים", person_names, key="move_to_accepted")
+            target_branches = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
+            target_branch = st.selectbox("בחר/י סניף יעד לרשימת המתקבלים", target_branches, key="move_to_accepted_branch")
+            if st.button("✅ העבר/י לרשימת המתקבלים"):
+                # Remove from waiting list
+                # Find the original branch for the selected person
+                original_branch = None
+                if branch == "הכל":
+                    # Search all branches except 'הכל' for the selected person
+                    for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
+                        for i, p in enumerate(data_store[facility][b]):
+                            p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                            if p_name == selected_person:
+                                person_to_move = data_store[facility][b].pop(i)
+                                original_branch = b
+                                break
+                        if original_branch:
+                            break
+                else:
+                    for i, p in enumerate(waiting_list):
+                        p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                        if p_name == selected_person:
+                            person_to_move = waiting_list.pop(i)
+                            original_branch = branch
+                            break
+                    else:
+                        person_to_move = None
+                if person_to_move:
+                    if not isinstance(person_to_move, dict):
+                        person_to_move = {"שם מלא": str(person_to_move)}
+                    accepted_person = {
+                        "שם מלא": person_to_move.get("שם מלא", ""),
+                        "תאריך המתנה": person_to_move.get("תאריך", ""),
+                        "תאריך קבלה": datetime.today().strftime("%Y-%m-%d"),
+                        "כתובת": person_to_move.get("כתובת", ""),
+                        "גורם מפנה": person_to_move.get("גורם מפנה", ""),
+                        "סניף מקורי": f"{original_branch if original_branch else ''}",
+                        "אישור ועדה": person_to_move.get("אישור ועדה", ""),
+                        "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
+                        "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
+                        "דוח רפואי": person_to_move.get("דוח רפואי", ""),
+                        "צילום תז": person_to_move.get("צילום תז", ""),
+                        "הערות": person_to_move.get("הערות", "")
+                    }
+                    # Load accepted list from Excel/session
+                    accepted_excel_path = "Data/accepted_list.xlsx"
+                    if "accepted_lists" not in st.session_state:
+                        loader = WaitingListDataLoaderClass(add_to_waitlist)
+                        try:
+                            store = loader.read_excel_to_data_store(accepted_excel_path,"גוש דן", FACILITY_BRANCHES["גוש דן"])
+                        except Exception as e:
+                            st.warning(f"Could not load Accepted Excel data: {e}")
+                        st.session_state["accepted_lists"] = store
+                    accepted_store = st.session_state["accepted_lists"]
+                    # Add to accepted list in the selected target branch
+                    accepted_store[facility][target_branch].append(accepted_person)
+                    # Save both lists to Excel
+                    loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
+                    loader.write_to_excel(accepted_store, facility, accepted_excel_path, FACILITY_BRANCHES[facility])
+                    st.success(f"{selected_person} הועבר/ה לרשימת המתקבלים בסניף {target_branch}!")
+                    st.rerun()
         # Delete person functionality
         st.markdown("---")
         st.markdown("### להוציא משתקם מהרשימת ההמתנה")
@@ -370,7 +382,6 @@ if sidebar_choice == "📋 רשימת המתנה":
                         break
     else:
         st.info("No one is currently on the waiting list.")
-
     # Save Changes button for Gush_Dan branches
     if facility == "גוש דן":
         if st.button("💾 שמור/י את השינויים"):
@@ -387,6 +398,7 @@ if sidebar_choice == "📋 רשימת המתנה":
                     file_name="waiting_list_gush_dan.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+
 elif sidebar_choice == "➕ הוספת משתקם":
 
     st.header("הוספת משתקם לרשימת ההמתנה")
@@ -448,6 +460,196 @@ elif sidebar_choice == "➕ הוספת משתקם":
                 loader.write_to_excel(data_store, "גוש דן", excel_path, FACILITY_BRANCHES["גוש דן"])
                 st.success(f"Added {שם_מלא} to {facility_q} - {branch_q} waiting list.")
                 st.toast("המשתקם נוסף בהצלחה!", icon="✅")
+
+elif sidebar_choice == "📝 עריכת משתקם":
+    st.header("עריכת משתקם")
+    col1, col2 = st.columns(2)
+    with col1:
+            facility = st.selectbox("בחר/י מרחב", FACILITIES, key="edit_facility")
+    with col2:
+        branches_no_all = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
+        branch = st.selectbox("בחר/י סניף", branches_no_all, key="edit_branch", index=None, placeholder="בחר/י סניף")
+    if branch == None:
+        st.info("אין משתקמים לעריכה בסניף זה.")
+    else:
+        waiting_list = get_waitlist(data_store, facility, branch)
+        person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+        selected_person_name = st.selectbox("בחר/י משתקם לעריכה", person_names)
+        # Find the selected person
+        selected_person = None
+        for p in waiting_list:
+            if str(p.get("שם מלא", "")) == selected_person_name:
+                selected_person = p
+                break
+        if selected_person:
+            # Editable fields
+            new_name = st.text_input("שם מלא", value=selected_person.get("שם מלא", ""))
+            new_date = st.date_input("תאריך", value=selected_person.get("תאריך", ""))
+            new_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""))
+            new_referrer = st.text_input("גורם מפנה", value=selected_person.get("גורם מפנה", ""))
+            # --- Add branch switcher ---
+            new_branch = st.selectbox("העבר/י לסניף אחר", branches_no_all, index=branches_no_all.index(branch))
+            new_q1 = st.radio("אישור ועדה", ["כן", "לא"], index=0 if selected_person.get("אישור ועדה") == "כן" else 1, horizontal=True)
+            new_q2 = st.radio("דוח פסיכיאטרי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכיאטרי") == "כן" else 1, horizontal=True)
+            new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1, horizontal=True)
+            new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1, horizontal=True)
+            new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1, horizontal=True)
+            new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
+            new_urgent = st.checkbox("?מקרה דחוף", value=selected_person.get("מקרה דחוף", False))
+            if st.button("שמור/י שינויים במשקם"):
+                selected_person["שם מלא"] = new_name
+                selected_person["תאריך"] = new_date
+                selected_person["כתובת"] = new_address
+                selected_person["גורם מפנה"] = new_referrer
+                selected_person["מקרה דחוף"] = new_urgent
+                selected_person["אישור ועדה"] = new_q1
+                selected_person["דוח פסיכיאטרי"] = new_q2
+                selected_person["דוח פסיכוסוציאלי"] = new_q3
+                selected_person["דוח רפואי"] = new_q4
+                selected_person["צילום תז"] = new_q5
+                selected_person["הערות"] = new_comments
+                # If branch changed, move person
+                if new_branch != branch:
+                    waiting_list.remove(selected_person)
+                    data_store[facility][new_branch].append(selected_person)
+                # Save to Excel if Gush Dan
+                if facility == "גוש דן":
+                    loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
+                st.success("המשקם עודכן בהצלחה!")
+
+elif sidebar_choice == "✅ מתקבלים":
+    st.header("רשימת המתקבלים")
+    accepted_excel_path = "Data/accepted_list.xlsx"
+    if "accepted_lists" not in st.session_state:
+        loader = WaitingListDataLoaderClass(add_to_waitlist)
+        try:
+            store = loader.read_excel_to_data_store(
+                accepted_excel_path,
+                "גוש דן",
+                FACILITY_BRANCHES["גוש דן"]
+            )
+        except Exception as e:
+            st.warning(f"Could not load Accepted Excel data: {e}")
+        st.session_state["accepted_lists"] = store
+    data_store = st.session_state["accepted_lists"]
+    col1, col2 = st.columns(2)
+    with col1:
+        facility = st.selectbox("בחר/י מרחב", FACILITIES, key="accepted_facility")
+    with col2:
+        branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="accepted_branch")
+    st.subheader(f"רשימת המתקבלים עבור {facility} - {branch}")
+    # --- Advanced Search & Filter Controls ---
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
+    with filter_col1:
+        search_name = st.text_input("🔍 חפש/י לפי שם", value="", key="accepted_search_name")
+    with filter_col2:
+        filter_urgent = st.selectbox("🆘 הצג/י רק מקרים דחופים", ("מקרה דחוף", "מקרה לא דחוף"), index=None, placeholder="בחר/י סוג מקרה", key="accepted_filter_urgent")
+    with filter_col3:
+        filter_date = st.date_input("📅 הצג/י מתקבלים מתאריך", value=None, key="accepted_filter_date")
+    # Get all people for selected branch/facility
+    if branch == "הכל":
+        all_people = []
+        for b in FACILITY_BRANCHES[facility]:
+            if b != "הכל":
+                all_people.extend(get_waitlist(data_store, facility, b))
+        waiting_list = all_people
+    else:
+        waiting_list = get_waitlist(data_store, facility, branch)
+    # --- Apply Filters ---
+    filtered_list = waiting_list
+    if search_name:
+        filtered_list = [p for p in filtered_list if search_name.strip() in str(p.get("שם מלא", ""))]
+    if filter_urgent == "מקרה דחוף":
+        filtered_list = [p for p in filtered_list if p.get("מקרה דחוף") in [True, "כן"]]
+    elif filter_urgent == "מקרה לא דחוף":
+        filtered_list = [ p for p in filtered_list if p.get("מקרה דחוף") in [False, "לא", None, ""] or pd.isna(p.get("מקרה דחוף"))]
+    if filter_date:
+        # Only show people added on or after the selected date
+        try:
+            filter_date_str = filter_date.strftime("%Y-%m-%d") if hasattr(filter_date, "strftime") else str(filter_date)
+            filtered_list = [p for p in filtered_list if pd.to_datetime(p.get("תאריך", None), errors="coerce") >= pd.to_datetime(filter_date_str)]
+        except Exception:
+            pass
+    if filtered_list:
+        df = pd.DataFrame(filtered_list)
+        df.index += 1
+        # Ensure 'תאריך' column is string for Arrow compatibility
+        if 'תאריך' in df.columns:
+            df['תאריך'] = df['תאריך'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x))
+        # Keep green check logic
+        def highlight_yes(row):
+            yes_fields = ["אישור ועדה", "דוח פסיכיאטרי", "דוח פסיכוסוציאלי", "דוח רפואי", "צילום תז"]
+            if all(row.get(f) == "כן" for f in yes_fields):
+                return ["background-color: lightgreen"] * len(row)
+            return [""] * len(row)
+        # Add urgent icon column if 'מקרה דחוף?' exists
+        if "מקרה דחוף" in df.columns:
+            df["מקרה דחוף"] = df["מקרה דחוף"].apply(lambda x: "🚨" if x in [True, "כן"] else "")
+        styled_df = df.style.apply(highlight_yes, axis=1)
+        st.dataframe(styled_df)
+        # --- Move person back to waiting list ---
+        st.markdown("---")
+        st.markdown("### החזר/י משתקם לרשימת ההמתנה")
+        person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+        if person_names:
+            selected_person = st.selectbox("בחר/י משתקם להחזרה לרשימת ההמתנה", person_names, key="move_to_waiting")
+            target_branches = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
+            target_branch = st.selectbox("בחר/י סניף יעד לרשימת ההמתנה", target_branches, key="move_to_waiting_branch")
+            if st.button("📋 החזר/י לרשימת המתנה"):
+                # Remove from accepted list
+                person_to_move = None
+                if branch == "הכל":
+                    # Search all branches except 'הכל' for the selected person
+                    for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
+                        for i, p in enumerate(data_store[facility][b]):
+                            p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                            if p_name == selected_person:
+                                person_to_move = data_store[facility][b].pop(i)
+                                break
+                        if person_to_move:
+                            break
+                else:
+                    for i, p in enumerate(waiting_list):
+                        p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                        if p_name == selected_person:
+                            person_to_move = waiting_list.pop(i)
+                            break
+                if person_to_move:
+                    # Prepare person dict for waiting list
+                    waiting_person = {
+                        "שם מלא": person_to_move.get("שם מלא", ""),
+                        "תאריך": person_to_move.get("תאריך המתנה", person_to_move.get("תאריך", "")),
+                        "כתובת": person_to_move.get("כתובת", ""),
+                        "גורם מפנה": person_to_move.get("גורם מפנה", ""),
+                        "אישור ועדה": person_to_move.get("אישור ועדה", ""),
+                        "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
+                        "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
+                        "דוח רפואי": person_to_move.get("דוח רפואי", ""),
+                        "צילום תז": person_to_move.get("צילום תז", ""),
+                        "הערות": person_to_move.get("הערות", ""),
+                        "מקרה דחוף": person_to_move.get("מקרה דחוף", False)
+                    }
+                    # Load waiting list from Excel/session
+                    waiting_excel_path = "Data/waiting_list_gush_dan.xlsx"
+                    if "waiting_lists" not in st.session_state:
+                        loader = WaitingListDataLoaderClass(add_to_waitlist)
+                        try:
+                            store = loader.read_excel_to_data_store(waiting_excel_path,"גוש דן", FACILITY_BRANCHES["גוש דן"])
+                        except Exception as e:
+                            st.warning(f"Could not load Waiting Excel data: {e}")
+                        st.session_state["waiting_lists"] = store
+                    waiting_store = st.session_state["waiting_lists"]
+                    # Add to waiting list in the selected target branch
+                    waiting_store[facility][target_branch].append(waiting_person)
+                    # Save both lists to Excel
+                    loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    loader.write_to_excel(data_store, facility, accepted_excel_path, FACILITY_BRANCHES[facility])
+                    loader.write_to_excel(waiting_store, facility, waiting_excel_path, FACILITY_BRANCHES[facility])
+                    st.success(f"{selected_person} הוחזר/ה לרשימת ההמתנה בסניף {target_branch}!")
+                    st.rerun()
+    else:
+        st.info("No one is currently on the accepted list.")
 
 elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
     st.markdown("## 📊 סטטיסטיקה ודוחות")
@@ -554,5 +756,9 @@ elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
             ).properties(title="כמות משתקמים חדשים בכל חודש")
             st.altair_chart(month_chart, use_container_width=True)
 
-
+#    
+# st.markdown("---")
+# debug_mode = st.checkbox("🐛 Debug Mode", value=False)
+# if debug_mode and logged_in:
+#     show_debug_panel()
 # --- End of File ---
