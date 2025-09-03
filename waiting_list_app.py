@@ -1,16 +1,3 @@
-"""
-Streamlit Waiting List Manager for Multiple Facilities and Branches
-
-Features:
-- Add a person to a waiting list for a specific facility and branch
-- View waiting lists per facility and branch
-- UI: Dropdowns, text input, table view
-- Data: In-memory nested dict, easy to swap for DB
-- Validation: No empty names
-- Auto-refresh after adding
-"""
-
-
 import streamlit as st
 from typing import Dict, List
 import pandas as pd
@@ -653,108 +640,188 @@ elif sidebar_choice == "✅ מתקבלים":
 
 elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
     st.markdown("## 📊 סטטיסטיקה ודוחות")
+    analytics_type = st.radio("בחר/י רשימה לניתוח", ["רשימת המתנה", "רשימת המתקבלים"], index=0)
     col1, col2 = st.columns(2)
     with col1:
         facility = st.selectbox("בחר/י מרחב", FACILITIES, key="stats_facility")
     with col2:
         branch = st.selectbox("בחר/י סניף", FACILITY_BRANCHES[facility], key="stats_branch")
-    stats = calculate_statistics(data_store, facility, None if branch == "הכל" else branch)
-    # --- Total statistics ---
-    # Gather all people for selected facility/branch
-    all_people = []
-    if branch == "הכל":
-        for b in FACILITY_BRANCHES[facility]:
-            if b != "הכל":
-                all_people.extend(get_waitlist(data_store, facility, b))
-    else:
-        all_people = get_waitlist(data_store, facility, branch)
 
-    total_people = len(all_people)
-    total_yes_all = sum(
-        1 for p in all_people
-        if isinstance(p, dict) and all([
-            p.get("אישור ועדה") == "כן",
-            p.get("דוח פסיכיאטרי") == "כן",
-            p.get("דוח פסיכוסוציאלי") == "כן",
-            p.get("דוח רפואי") == "כן",
-            p.get("צילום תז") == "כן"
-        ])
-    )
-    total_urgent_cases = sum(
-        1 for p in all_people
-        if isinstance(p, dict) and p.get("מקרה דחוף") is True
-    )
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="מספר משתקמים ברשימה", value=total_people)
-    
-    with col2:
-        st.metric(label="מספר משתקמים שיש להם את כל הטפסים", value=total_yes_all)
-    with col3:
-        st.metric(label="מספר המקרים הדחופים", value=total_urgent_cases)
-    if not stats:
-        st.info("No data available for selected filters.")
-    else:
-        df_stats = pd.DataFrame(stats)
-        # Ensure 'dates' column is datetime
-        if "dates" in df_stats.columns:
-            df_stats["dates"] = pd.to_datetime(df_stats["dates"], errors="coerce")
+    if analytics_type == "רשימת המתנה":
+        # --- Waiting List Analytics ---
+        stats_data_store = st.session_state.get("waiting_lists", {})
+        stats = calculate_statistics(stats_data_store, facility, None if branch == "הכל" else branch)
+        all_people = []
         if branch == "הכל":
-            # Number of people waiting per branch
-            bar = alt.Chart(df_stats).mark_bar().encode(
-                x="branch",
-                y="count",
-                color="branch",
-                tooltip=["branch", "count"]
-            ).properties(title="מספר ממתינים מכל סניף")
-            st.altair_chart(bar, use_container_width=True)
-            # Boxplot of waiting times per branch
-            # Gather all waiting times per branch
-            box_data = []
-            for s in stats:
-                branch_name = s["branch"]
-                dates = s["dates"]
-                for d in dates:
-                    wait_days = (datetime.today() - datetime.strptime(d, "%Y-%m-%d")).days if isinstance(d, str) else (datetime.today() - d).days
-                    box_data.append({"branch": branch_name, "wait_days": wait_days})
-            df_box = pd.DataFrame(box_data)
-            # Ensure 'wait_days' is numeric
-            if not df_box.empty:
-                df_box["wait_days"] = pd.to_numeric(df_box["wait_days"], errors="coerce")
-                # Calculate mean and median per branch
-                mean_df = df_box.groupby("branch", as_index=False)["wait_days"].mean()
-                mean_df["stat"] = "Mean"
-                median_df = df_box.groupby("branch", as_index=False)["wait_days"].median()
-                median_df["stat"] = "Median"
-                stat_df = pd.concat([mean_df, median_df])
-
-                stat_points = alt.Chart(stat_df).mark_point(filled=True, size=200).encode(
+            for b in FACILITY_BRANCHES[facility]:
+                if b != "הכל":
+                    all_people.extend(get_waitlist(stats_data_store, facility, b))
+        else:
+            all_people = get_waitlist(stats_data_store, facility, branch)
+        total_people = len(all_people)
+        total_yes_all = sum(
+            1 for p in all_people
+            if isinstance(p, dict) and all([
+                p.get("אישור ועדה") == "כן",
+                p.get("דוח פסיכיאטרי") == "כן",
+                p.get("דוח פסיכוסוציאלי") == "כן",
+                p.get("דוח רפואי") == "כן",
+                p.get("צילום תז") == "כן"
+            ])
+        )
+        total_urgent_cases = sum(
+            1 for p in all_people
+            if isinstance(p, dict) and p.get("מקרה דחוף") in [True, "כן"]
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="מספר משתקמים ברשימה", value=total_people)
+        with col2:
+            st.metric(label="מספר משתקמים שיש להם את כל הטפסים", value=total_yes_all)
+        with col3:
+            st.metric(label="מספר המקרים הדחופים", value=total_urgent_cases)
+        if not stats:
+            st.info("No data available for selected filters.")
+        else:
+            df_stats = pd.DataFrame(stats)
+            if "dates" in df_stats.columns:
+                df_stats["dates"] = pd.to_datetime(df_stats["dates"], errors="coerce")
+            if branch == "הכל":
+                bar = alt.Chart(df_stats).mark_bar().encode(
                     x="branch",
-                    y=alt.Y("wait_days", title="Waiting Time (days)"),
+                    y="count",
                     color="branch",
-                    shape="stat",
-                    tooltip=["branch", "wait_days", "stat"]
-                ).properties(title="זמן המתנה עבור כל סניף (ממוצע וחציון)")
-                st.altair_chart(stat_points, use_container_width=True)
-        # Load/occupancy trends by day and month
-        all_dates = []
-        for s in stats:
-            all_dates.extend(s["dates"])
-        if all_dates:
-            df_dates = pd.DataFrame({"תאריך": all_dates})
-            df_dates["תאריך"] = pd.to_datetime(df_dates["תאריך"])
-            df_dates["day"] = df_dates["תאריך"].dt.date
-            df_dates["month"] = df_dates["תאריך"].dt.to_period("M")
-            day_counts = df_dates.groupby("day").size().reset_index(name="count")
-            month_counts = df_dates.groupby("month").size().reset_index(name="count")
-            # Convert month to string for Altair axis
-            month_counts["month"] = month_counts["month"].astype(str)
-            month_chart = alt.Chart(month_counts).mark_bar().encode(
-                x=alt.X("month", title="Month"),
-                y="count",
-                tooltip=["month", "count"]
-            ).properties(title="כמות משתקמים חדשים בכל חודש")
-            st.altair_chart(month_chart, use_container_width=True)
+                    tooltip=["branch", "count"]
+                ).properties(title="מספר ממתינים מכל סניף")
+                st.altair_chart(bar, use_container_width=True)
+                box_data = []
+                for s in stats:
+                    branch_name = s["branch"]
+                    dates = s["dates"]
+                    for d in dates:
+                        wait_days = (datetime.today() - datetime.strptime(str(d), "%Y-%m-%d")).days if isinstance(d, str) else (datetime.today() - d).days
+                        box_data.append({"branch": branch_name, "wait_days": wait_days})
+                df_box = pd.DataFrame(box_data)
+                if not df_box.empty:
+                    df_box["wait_days"] = pd.to_numeric(df_box["wait_days"], errors="coerce")
+                    mean_df = df_box.groupby("branch", as_index=False)["wait_days"].mean()
+                    mean_df["stat"] = "Mean"
+                    median_df = df_box.groupby("branch", as_index=False)["wait_days"].median()
+                    median_df["stat"] = "Median"
+                    stat_df = pd.concat([mean_df, median_df])
+                    stat_points = alt.Chart(stat_df).mark_point(filled=True, size=200).encode(
+                        x="branch",
+                        y=alt.Y("wait_days", title="Waiting Time (days)"),
+                        color="branch",
+                        shape="stat",
+                        tooltip=["branch", "wait_days", "stat"]
+                    ).properties(title="זמן המתנה עבור כל סניף (ממוצע וחציון)")
+                    st.altair_chart(stat_points, use_container_width=True)
+            all_dates = []
+            for s in stats:
+                all_dates.extend(s["dates"])
+            if all_dates:
+                df_dates = pd.DataFrame({"תאריך": all_dates})
+                df_dates["תאריך"] = pd.to_datetime(df_dates["תאריך"])
+                df_dates["day"] = df_dates["תאריך"].dt.date
+                df_dates["month"] = df_dates["תאריך"].dt.to_period("M")
+                day_counts = df_dates.groupby("day").size().reset_index(name="count")
+                month_counts = df_dates.groupby("month").size().reset_index(name="count")
+                month_counts["month"] = month_counts["month"].astype(str)
+                month_chart = alt.Chart(month_counts).mark_bar().encode(
+                    x=alt.X("month", title="Month"),
+                    y="count",
+                    tooltip=["month", "count"]
+                ).properties(title="כמות ממתינים חדשים בכל חודש")
+                st.altair_chart(month_chart, use_container_width=True)
+    else:
+        # --- Accepted List Analytics ---
+        accepted_excel_path = "Data/accepted_list.xlsx"
+        if "accepted_lists" not in st.session_state:
+            loader = WaitingListDataLoaderClass(add_to_waitlist)
+            try:
+                store = loader.read_excel_to_data_store(
+                    accepted_excel_path,
+                    "גוש דן",
+                    FACILITY_BRANCHES["גוש דן"]
+                )
+            except Exception as e:
+                st.warning(f"Could not load Accepted Excel data: {e}")
+            st.session_state["accepted_lists"] = store
+        stats_data_store = st.session_state["accepted_lists"]
+        stats = calculate_statistics(stats_data_store, facility, None if branch == "הכל" else branch)
+        all_people = []
+        if branch == "הכל":
+            for b in FACILITY_BRANCHES[facility]:
+                if b != "הכל":
+                    all_people.extend(get_waitlist(stats_data_store, facility, b))
+        else:
+            all_people = get_waitlist(stats_data_store, facility, branch)
+        total_people = len(all_people)
+        total_yes_all = sum(
+            1 for p in all_people
+            if isinstance(p, dict) and all([
+                p.get("אישור ועדה") == "כן",
+                p.get("דוח פסיכיאטרי") == "כן",
+                p.get("דוח פסיכוסוציאלי") == "כן",
+                p.get("דוח רפואי") == "כן",
+                p.get("צילום תז") == "כן"
+            ])
+        )
+        total_urgent_cases = sum(
+            1 for p in all_people
+            if isinstance(p, dict) and p.get("מקרה דחוף") in [True, "כן"]
+        )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label="מספר מתקבלים ברשימה", value=total_people)
+        with col2:
+            st.metric(label="מספר מתקבלים שיש להם את כל הטפסים", value=total_yes_all)
+        with col3:
+            st.metric(label="מספר המקרים הדחופים", value=total_urgent_cases)
+        if not stats:
+            st.info("No data available for selected filters.")
+        else:
+            df_stats = pd.DataFrame(stats)
+            if "dates" in df_stats.columns:
+                df_stats["dates"] = pd.to_datetime(df_stats["dates"], errors="coerce")
+            if branch == "הכל":
+                bar = alt.Chart(df_stats).mark_bar().encode(
+                    x="branch",
+                    y="count",
+                    color="branch",
+                    tooltip=["branch", "count"]
+                ).properties(title="מספר מתקבלים מכל סניף")
+                st.altair_chart(bar, use_container_width=True)
+            # --- Chart 1: Number accepted per month ---
+            accepted_people = []
+            for b in FACILITY_BRANCHES[facility]:
+                if b != "הכל":
+                    accepted_people.extend(get_waitlist(stats_data_store, facility, b))
+            df_accepted = pd.DataFrame(accepted_people)
+            if not df_accepted.empty and "תאריך קבלה" in df_accepted.columns:
+                df_accepted["תאריך קבלה"] = pd.to_datetime(df_accepted["תאריך קבלה"], errors="coerce")
+                df_accepted["month"] = df_accepted["תאריך קבלה"].dt.to_period("M")
+                month_counts = df_accepted.groupby("month").size().reset_index(name="count")
+                month_counts["month"] = month_counts["month"].astype(str)
+                month_chart = alt.Chart(month_counts).mark_bar().encode(
+                    x=alt.X("month", title="חודש קבלה"),
+                    y="count",
+                    tooltip=["month", "count"]
+                ).properties(title="כמות מתקבלים בכל חודש")
+                st.altair_chart(month_chart, use_container_width=True)
+            # --- Chart 2: Average time from תאריך המתנה to תאריך קבלה per month ---
+            if not df_accepted.empty and "תאריך קבלה" in df_accepted.columns and "תאריך המתנה" in df_accepted.columns:
+                df_accepted["תאריך המתנה"] = pd.to_datetime(df_accepted["תאריך המתנה"], errors="coerce")
+                df_accepted["wait_days"] = (df_accepted["תאריך קבלה"] - df_accepted["תאריך המתנה"]).dt.days
+                avg_wait_by_month = df_accepted.groupby(df_accepted["תאריך קבלה"].dt.to_period("M"))["wait_days"].mean().reset_index()
+                avg_wait_by_month["month"] = avg_wait_by_month["תאריך קבלה"].astype(str)
+                avg_wait_chart = alt.Chart(avg_wait_by_month).mark_line(point=True).encode(
+                    x=alt.X("month", title="חודש קבלה"),
+                    y=alt.Y("wait_days", title="ממוצע ימים המתנה עד קבלה"),
+                    tooltip=["month", "wait_days"]
+                ).properties(title="ממוצע זמן המתנה עד קבלה בכל חודש")
+                st.altair_chart(avg_wait_chart, use_container_width=True)
 
 #    
 # st.markdown("---")
