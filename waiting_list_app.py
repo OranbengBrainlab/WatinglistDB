@@ -3,8 +3,8 @@ from typing import Dict, List
 import pandas as pd
 import time
 import altair as alt
-from datetime import datetime
-from WaitingListDataLoader import WaitingListDataLoaderClass
+from datetime import datetime, date
+from WaitingListDataLoader import WaitingListDataLoaderClass,SupabaseDBClient
 
 
 # --- Configuration ---
@@ -21,7 +21,8 @@ FACILITY_BRANCHES = {
 #    "שרון": ["נתניה", "עמק_חפר", "הכל"],
 #    "ירושלים": ["מרכז", "מבשרת", "הכל"]
 # }
-DataType = "Excel"
+# DataType = "Excel"
+DataType = "DB"
 
 
 
@@ -103,6 +104,13 @@ def load_waiting_list_from_excel(file_path: str, facility: str, branches: list) 
         else:
             branch_data[branch] = []
     return branch_data
+
+def serialize_dates(data):
+    for k, v in data.items():
+        if isinstance(v, date):
+            data[k] = v.strftime("%Y-%m-%d")
+    return data
+
 # --- Streamlit UI ---
 
 
@@ -124,7 +132,24 @@ if DataType == "Excel":
         st.session_state["waiting_lists"] = store
 
     data_store = st.session_state["waiting_lists"]
-
+elif DataType == "DB":
+    DBloader = SupabaseDBClient(
+        supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+        supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+        facility="גוש דן",
+        branches=FACILITY_BRANCHES["גוש דן"]
+    )
+    try:
+        store = DBloader.read_waiting_list()
+    except Exception as e:
+        st.warning(f"Could not load DB data: {e}")
+    st.session_state["waiting_lists"] = store
+    data_store = st.session_state["waiting_lists"]
+    try:
+        store2 = DBloader.read_accepted_list()
+    except Exception as e:
+        st.warning(f"Could not load DB data: {e}")
+    st.session_state["accepted_lists"] = store2
 
 # --- User Authentication ---
 VALID_USERS = {
@@ -152,6 +177,7 @@ def show_debug_panel():
     with st.expander("📋 Data Debug", expanded=False):
         st.write("**Current Waiting Lists Data:**")
         st.write(st.session_state.get("waiting_lists", {}))
+        st.write(st.session_state.get("waiting_lists2", {}))
         # Excel debug info
         excel_path = "Data/waiting_list_gush_dan.xlsx"
         try:
@@ -208,18 +234,18 @@ if sidebar_choice != "🏠 דף בית" and not logged_in:
 
 elif sidebar_choice == "📋 רשימת המתנה":
     st.header("רשימת המתנה")
-    excel_path = "Data/waiting_list_gush_dan.xlsx"
-    if "waiting_lists" not in st.session_state:
-        loader = WaitingListDataLoaderClass(add_to_waitlist)
-        try:
-            store = loader.read_excel_to_data_store(
-                excel_path,
-                "גוש דן",
-                FACILITY_BRANCHES["גוש דן"]
-            )
-        except Exception as e:
-            st.warning(f"Could not load Excel data: {e}")
-        st.session_state["waiting_lists"] = store
+    # excel_path = "Data/waiting_list_gush_dan.xlsx"
+    # if "waiting_lists" not in st.session_state:
+    #     loader = WaitingListDataLoaderClass(add_to_waitlist)
+    #    try:
+    #         store = loader.read_excel_to_data_store(
+    #             excel_path,
+    #             "גוש דן",
+    #             FACILITY_BRANCHES["גוש דן"]
+    #         )
+    #     except Exception as e:
+    #         st.warning(f"Could not load Excel data: {e}")
+    #     st.session_state["waiting_lists"] = store
     data_store = st.session_state["waiting_lists"]
     col1, col2 = st.columns(2)
     with col1:
@@ -295,16 +321,15 @@ elif sidebar_choice == "📋 רשימת המתנה":
             target_branches = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
             target_branch = st.selectbox("בחר/י סניף יעד לרשימת המתקבלים", target_branches, key="move_to_accepted_branch")
             if st.button("✅ העבר/י לרשימת המתקבלים"):
-                # Remove from waiting list
-                # Find the original branch for the selected person
+                # Remove from WaitingList DB and add to AcceptedList DB
                 original_branch = None
+                person_to_move = None
                 if branch == "הכל":
-                    # Search all branches except 'הכל' for the selected person
                     for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
                         for i, p in enumerate(data_store[facility][b]):
                             p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
                             if p_name == selected_person:
-                                person_to_move = data_store[facility][b].pop(i)
+                                person_to_move = data_store[facility][b][i]
                                 original_branch = b
                                 break
                         if original_branch:
@@ -313,11 +338,9 @@ elif sidebar_choice == "📋 רשימת המתנה":
                     for i, p in enumerate(waiting_list):
                         p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
                         if p_name == selected_person:
-                            person_to_move = waiting_list.pop(i)
+                            person_to_move = waiting_list[i]
                             original_branch = branch
                             break
-                    else:
-                        person_to_move = None
                 if person_to_move:
                     if not isinstance(person_to_move, dict):
                         person_to_move = {"שם מלא": str(person_to_move)}
@@ -333,24 +356,23 @@ elif sidebar_choice == "📋 רשימת המתנה":
                         "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
                         "דוח רפואי": person_to_move.get("דוח רפואי", ""),
                         "צילום תז": person_to_move.get("צילום תז", ""),
-                        "הערות": person_to_move.get("הערות", "")
+                        "הערות": person_to_move.get("הערות", ""),
+                        # New for DB ONLY
+                        "סניף": target_branch,
+                        "מרחב": facility
                     }
-                    # Load accepted list from Excel/session
-                    accepted_excel_path = "Data/accepted_list.xlsx"
-                    if "accepted_lists" not in st.session_state:
-                        loader = WaitingListDataLoaderClass(add_to_waitlist)
-                        try:
-                            store = loader.read_excel_to_data_store(accepted_excel_path,"גוש דן", FACILITY_BRANCHES["גוש דן"])
-                        except Exception as e:
-                            st.warning(f"Could not load Accepted Excel data: {e}")
-                        st.session_state["accepted_lists"] = store
-                    accepted_store = st.session_state["accepted_lists"]
-                    # Add to accepted list in the selected target branch
-                    accepted_store[facility][target_branch].append(accepted_person)
-                    # Save both lists to Excel
-                    loader = WaitingListDataLoaderClass(add_to_waitlist)
-                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
-                    loader.write_to_excel(accepted_store, facility, accepted_excel_path, FACILITY_BRANCHES[facility])
+                    # Ensure 'מקרה דחוף' is boolean for Supabase
+                    accepted_person["מקרה דחוף"] = True if person_to_move.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
+                    DBloader = SupabaseDBClient(
+                        supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+                        supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+                        facility="גוש דן",
+                        branches=FACILITY_BRANCHES["גוש דן"]
+                    )
+                    # Add to AcceptedList DB
+                    DBloader.add_person_to_accepted_list(accepted_person)
+                    # Remove from WaitingList DB
+                    DBloader.remove_person_from_waiting_list(selected_person)
                     st.success(f"{selected_person} הועבר/ה לרשימת המתקבלים בסניף {target_branch}!")
                     st.rerun()
         # Delete person functionality
@@ -363,28 +385,34 @@ elif sidebar_choice == "📋 רשימת המתנה":
                 # Remove first matching person
                 for i, p in enumerate(waiting_list):
                     if str(p.get("שם מלא", "")) == selected_person:
-                        del waiting_list[i]
+                        DBloader = SupabaseDBClient(
+                            supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+                            supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+                            facility="גוש דן",
+                            branches=FACILITY_BRANCHES["גוש דן"]
+                        )
+                        DBloader.remove_person_from_waiting_list(selected_person)
                         st.success(f"Removed {selected_person} from the waiting list.")
                         st.rerun()
                         break
     else:
         st.info("No one is currently on the waiting list.")
     # Save Changes button for Gush_Dan branches
-    if facility == "גוש דן":
-        if st.button("💾 שמור/י את השינויים"):
-            loader = WaitingListDataLoaderClass(add_to_waitlist)
-            if DataType == "Excel":
-                loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES["גוש דן"])
-            st.success("!השינויים נשמרו בהצלחה")
+#     if facility == "גוש דן":
+#         if st.button("💾 שמור/י את השינויים"):
+#             loader = WaitingListDataLoaderClass(add_to_waitlist)
+#             if DataType == "Excel":
+#                 loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES["גוש דן"])
+#             st.success("!השינויים נשמרו בהצלחה")
         # --- Admin-only Excel download ---
-        if logged_in == "admin":
-            with open(excel_path, "rb") as f:
-                st.download_button(
-                    label="הורד/י את קובץ האקסל",
-                    data=f,
-                    file_name="waiting_list_gush_dan.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+#         if logged_in == "admin":
+#             with open(excel_path, "rb") as f:
+#                 st.download_button(
+#                     label="הורד/י את קובץ האקסל",
+#                     data=f,
+#                     file_name="waiting_list_gush_dan.xlsx",
+#                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+#                )
 
 elif sidebar_choice == "➕ הוספת משתקם":
 
@@ -430,7 +458,10 @@ elif sidebar_choice == "➕ הוספת משתקם":
                 "דוח רפואי": q4,
                 "צילום תז": q5,
                 "הערות": comments,
-                "מקרה דחוף": מקרה_דחוף
+                "מקרה דחוף": מקרה_דחוף,
+                # New for DB ONLY
+                "סניף": branch_q,
+                "מרחב": facility_q
             }
             if not שם_מלא.strip():
                 st.error("נא לבחור שם")
@@ -439,12 +470,19 @@ elif sidebar_choice == "➕ הוספת משתקם":
             elif תאריך == None:
                 st.error("נא לבחור תאריך")
             else:
-                loader = WaitingListDataLoaderClass(add_to_waitlist)
-                store = loader.read_excel_to_data_store(excel_path,"גוש דן",FACILITY_BRANCHES["גוש דן"])
-                st.session_state["waiting_lists"] = store
-                data_store = st.session_state["waiting_lists"]
-                add_to_waitlist(st.session_state["waiting_lists"], person, facility_q, branch_q)
-                loader.write_to_excel(data_store, "גוש דן", excel_path, FACILITY_BRANCHES["גוש דן"])
+                # loader = WaitingListDataLoaderClass(add_to_waitlist)
+                # store = loader.read_excel_to_data_store(excel_path,"גוש דן",FACILITY_BRANCHES["גוש דן"])
+                # st.session_state["waiting_lists"] = store
+                # data_store = st.session_state["waiting_lists"]
+                # add_to_waitlist(st.session_state["waiting_lists"], person, facility_q, branch_q)
+                # loader.write_to_excel(data_store, "גוש דן", excel_path, FACILITY_BRANCHES["גוש דן"])
+                DBloader = SupabaseDBClient(
+                    supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+                    supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+                    facility="גוש דן",
+                    branches=FACILITY_BRANCHES["גוש דן"]
+                )
+                DBloader.add_person(person)
                 st.success(f"Added {שם_מלא} to {facility_q} - {branch_q} waiting list.")
                 st.toast("המשתקם נוסף בהצלחה!", icon="✅")
 
@@ -470,6 +508,7 @@ elif sidebar_choice == "📝 עריכת משתקם":
                 break
         if selected_person:
             # Editable fields
+            Original_Name = selected_person.get("שם מלא", "")
             new_name = st.text_input("שם מלא", value=selected_person.get("שם מלא", ""))
             new_date = st.date_input("תאריך", value=selected_person.get("תאריך", ""))
             new_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""))
@@ -495,30 +534,59 @@ elif sidebar_choice == "📝 עריכת משתקם":
                 selected_person["דוח רפואי"] = new_q4
                 selected_person["צילום תז"] = new_q5
                 selected_person["הערות"] = new_comments
+                # For new DB Solution
+                selected_person["סניף"] = new_branch
+                selected_person["מרחב"] = facility
                 # If branch changed, move person
-                if new_branch != branch:
-                    waiting_list.remove(selected_person)
-                    data_store[facility][new_branch].append(selected_person)
+                # if new_branch != branch:
+                #     waiting_list.remove(selected_person)
+                #     data_store[facility][new_branch].append(selected_person)
                 # Save to Excel if Gush Dan
                 if facility == "גוש דן":
-                    loader = WaitingListDataLoaderClass(add_to_waitlist)
-                    loader.write_to_excel(data_store, facility, excel_path, FACILITY_BRANCHES[facility])
-                st.success("המשקם עודכן בהצלחה!")
+                    DBloader = SupabaseDBClient(
+                        supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+                        supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+                        facility="גוש דן",
+                        branches=FACILITY_BRANCHES["גוש דן"]
+                    )
+                    selected_person = serialize_dates(selected_person)
+                    try:
+                        result = DBloader.edit_person(Original_Name, selected_person)
+                        # If the method returns a response, check for error status
+                        if hasattr(result, 'status_code') and result.status_code >= 400:
+                            st.error(f"שגיאה בעדכון המשקם: {getattr(result, 'text', 'Unknown error')}")
+                        else:
+                            st.success("המשקם עודכן בהצלחה!")
+                    except Exception as e:
+                        st.error(f"עדכון המשקם נכשל: {e}")
 
 elif sidebar_choice == "✅ מתקבלים":
     st.header("רשימת המתקבלים")
-    accepted_excel_path = "Data/accepted_list.xlsx"
-    if "accepted_lists" not in st.session_state:
-        loader = WaitingListDataLoaderClass(add_to_waitlist)
-        try:
-            store = loader.read_excel_to_data_store(
-                accepted_excel_path,
-                "גוש דן",
-                FACILITY_BRANCHES["גוש דן"]
-            )
-        except Exception as e:
-            st.warning(f"Could not load Accepted Excel data: {e}")
-        st.session_state["accepted_lists"] = store
+    # accepted_excel_path = "Data/accepted_list.xlsx"
+    # if "accepted_lists" not in st.session_state:
+    #    loader = WaitingListDataLoaderClass(add_to_waitlist)
+    #    try:
+    #        store = loader.read_excel_to_data_store(
+    #            accepted_excel_path,
+    #            "גוש דן",
+    #            FACILITY_BRANCHES["גוש דן"]
+    #        )
+    #    except Exception as e:
+    #        st.warning(f"Could not load Accepted Excel data: {e}")
+    #    st.session_state["accepted_lists"] = store
+    
+    DBloader = SupabaseDBClient(
+        supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+        supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+        facility="גוש דן",
+        branches=FACILITY_BRANCHES["גוש דן"]
+    )    
+    try:
+        store2 = DBloader.read_accepted_list()
+    except Exception as e:
+        st.warning(f"Could not load DB data: {e}")
+    st.session_state["accepted_lists"] = store2
+    
     data_store = st.session_state["accepted_lists"]
     col1, col2 = st.columns(2)
     with col1:
@@ -615,24 +683,38 @@ elif sidebar_choice == "✅ מתקבלים":
                         "דוח רפואי": person_to_move.get("דוח רפואי", ""),
                         "צילום תז": person_to_move.get("צילום תז", ""),
                         "הערות": person_to_move.get("הערות", ""),
-                        "מקרה דחוף": person_to_move.get("מקרה דחוף", False)
+                        # "מקרה דחוף": person_to_move.get("מקרה דחוף", False),
+                        # New for DB ONLY
+                        "סניף": target_branch,
+                        "מרחב": facility
                     }
+                    # Ensure 'מקרה דחוף' is boolean for Supabase
+                    waiting_person["מקרה דחוף"] = True if waiting_person.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
+                    DBloader = SupabaseDBClient(
+                        supabase_url="https://fpvswpsvpyqvwpkmxtgj.supabase.co",
+                        supabase_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwdnN3cHN2cHlxdndwa214dGdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5OTYyNTQsImV4cCI6MjA3MjU3MjI1NH0.d7IQonhpRMvoGcaG47gVA4JE95O5fFQfmvUe9WB6BpQ",
+                        facility="גוש דן",
+                        branches=FACILITY_BRANCHES["גוש דן"]
+                    )
+                    print(waiting_person)
+                    DBloader.add_person(waiting_person)
+                    DBloader.remove_person_from_accepted_list(selected_person)
                     # Load waiting list from Excel/session
-                    waiting_excel_path = "Data/waiting_list_gush_dan.xlsx"
-                    if "waiting_lists" not in st.session_state:
-                        loader = WaitingListDataLoaderClass(add_to_waitlist)
-                        try:
-                            store = loader.read_excel_to_data_store(waiting_excel_path,"גוש דן", FACILITY_BRANCHES["גוש דן"])
-                        except Exception as e:
-                            st.warning(f"Could not load Waiting Excel data: {e}")
-                        st.session_state["waiting_lists"] = store
-                    waiting_store = st.session_state["waiting_lists"]
+                    # waiting_excel_path = "Data/waiting_list_gush_dan.xlsx"
+                    # if "waiting_lists" not in st.session_state:
+                    #     loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    #     try:
+                    #         store = loader.read_excel_to_data_store(waiting_excel_path,"גוש דן", FACILITY_BRANCHES["גוש דן"])
+                    #     except Exception as e:
+                    #         st.warning(f"Could not load Waiting Excel data: {e}")
+                    #     st.session_state["waiting_lists"] = store
+                    # waiting_store = st.session_state["waiting_lists"]
                     # Add to waiting list in the selected target branch
-                    waiting_store[facility][target_branch].append(waiting_person)
+                    # waiting_store[facility][target_branch].append(waiting_person)
                     # Save both lists to Excel
-                    loader = WaitingListDataLoaderClass(add_to_waitlist)
-                    loader.write_to_excel(data_store, facility, accepted_excel_path, FACILITY_BRANCHES[facility])
-                    loader.write_to_excel(waiting_store, facility, waiting_excel_path, FACILITY_BRANCHES[facility])
+                    # loader = WaitingListDataLoaderClass(add_to_waitlist)
+                    # loader.write_to_excel(data_store, facility, accepted_excel_path, FACILITY_BRANCHES[facility])
+                    # loader.write_to_excel(waiting_store, facility, waiting_excel_path, FACILITY_BRANCHES[facility])
                     st.success(f"{selected_person} הוחזר/ה לרשימת ההמתנה בסניף {target_branch}!")
                     st.rerun()
     else:
