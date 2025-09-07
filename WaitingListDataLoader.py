@@ -167,8 +167,8 @@ class SupabaseDBClient:
                     for k, v in field_map.items():
                         person[v] = row.get(k, "")
                     # Drop 'סניף' and 'מרחב'
-                    person.pop("סניף", None)
-                    # person.pop("מרחב", None)
+                    # pop("סניף", None)
+                    person.pop("מרחב", None)
                     data_store[self.facility][branch].append(person)
         else:
             print(f"Error fetching waiting_list: {response.text}")

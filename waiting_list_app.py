@@ -377,7 +377,7 @@ elif sidebar_choice == "📋 רשימת המתנה":
                     st.rerun()
         # Delete person functionality
         st.markdown("---")
-        st.markdown("### להוציא משתקם מהרשימת ההמתנה")
+        st.markdown("### להוציא משתקם מרשימת ההמתנה")
         if len(df) > 0:
             person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
             selected_person = st.selectbox("בחר/י משתקם להסרה", person_names)
