@@ -6,7 +6,22 @@ import altair as alt
 from datetime import datetime, date
 from WaitingListDataLoader import WaitingListDataLoaderClass,SupabaseDBClient
 
+HIDE_UI = """
+<style>
+/* Hide hamburger menu and footer */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
 
+/* Optional: hide Streamlit header bar */
+header {visibility: hidden;}
+
+/* Hide deploy/edit toolbar/buttons on Cloud (selectors used by Streamlit) */
+.stDeployButton, .stAppDeployButton,
+[data-testid="stToolbar"], [data-testid="Toolbar"],
+button[kind="header"] {display: none !important;}
+</style>
+"""
+st.markdown(HIDE_UI, unsafe_allow_html=True)
 # --- Configuration ---
 FACILITIES = ["גוש דן"]
 # Branches per facility
