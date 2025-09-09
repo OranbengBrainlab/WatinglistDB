@@ -146,6 +146,7 @@ class SupabaseDBClient:
         field_map = {
             "name": "שם מלא",
             "date_added": "תאריך",
+            "status": "סטטוס",
             "address": "כתובת",
             "referrer": "גורם מפנה",
             "committee_approval": "אישור ועדה",
@@ -183,6 +184,7 @@ class SupabaseDBClient:
             "שם מלא": "name",
             "תאריך": "date_added",
             "כתובת": "address",
+            "סטטוס": "status",
             "גורם מפנה": "referrer",
             "אישור ועדה": "committee_approval",
             "דוח פסיכיאטרי": "psychiatric_report",
@@ -212,6 +214,7 @@ class SupabaseDBClient:
         field_map = {
             "שם מלא": "name",
             "תאריך": "date_added",
+            "סטטוס": "status",
             "כתובת": "address",
             "גורם מפנה": "referrer",
             "אישור ועדה": "committee_approval",
@@ -312,6 +315,8 @@ class SupabaseDBClient:
         supabase_person = {field_map[k]: v for k, v in person_dict.items() if k in field_map}
         url = f"{self.supabase_url}/rest/v1/AcceptedList"
         response = requests.post(url, headers=self.headers, json=supabase_person, verify=False)
+        print("Oran orna oran")
+        print(response)
         if response.ok:
             print("Person added to AcceptedList successfully.")
         else:
