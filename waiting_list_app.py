@@ -149,7 +149,7 @@ def show_debug_panel():
 HIDE_UI = """
 <style>
 /* Hide default menu/footer/header */
-#MainMenu {visibility: hidden;}
+#MainMenu, footer {visibility: hidden;}
 
 
 
