@@ -7,20 +7,27 @@ from datetime import datetime, date
 from WaitingListDataLoader import WaitingListDataLoaderClass,SupabaseDBClient
 
 
+st.set_page_config(page_title="My App")
+
 HIDE_UI = """
 <style>
-/* Hide hamburger menu and footer */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
+/* Hide default menu/footer/header */
+#MainMenu, footer, header {visibility: hidden;}
 
-/* Hide Streamlit header bar */
-header {visibility: hidden;}
-
-/* Hide Cloud toolbar: Deploy/Edit/Manage App */
+/* Hide Cloud toolbar (Deploy/Edit/… ) */
 .stDeployButton, .stAppDeployButton,
 [data-testid="stToolbar"], [data-testid="Toolbar"],
-button[kind="header"], 
-a[title="Manage app"] {display: none !important;}
+button[kind="header"] {display:none !important;}
+
+/* Hide the bottom-right viewer badge (includes “Manage app”) */
+a[title="Manage app"],
+a[aria-label="Manage app"],
+button[aria-label="Manage app"],
+[data-testid="manageAppButton"],
+/* classes are hashed; target by prefix */
+[class^="viewerBadge_"], [class*=" viewerBadge_"],
+/* extra belt-and-suspenders for status widget variants */
+[data-testid="stStatusWidget"] {display:none !important;}
 </style>
 """
 st.markdown(HIDE_UI, unsafe_allow_html=True)
