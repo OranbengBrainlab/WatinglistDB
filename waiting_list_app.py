@@ -148,10 +148,11 @@ def show_debug_panel():
 # --- Hide Streamlit UI Elements ---
 HIDE_UI = """
 <style>
-/* Hide default menu/footer/header */
-#MainMenu, footer {visibility: hidden;}
 
 
+/* Hide Cloud toolbar (Deploy/Edit/… ) */
+.stDeployButton, .stAppDeployButton,
+button[kind="header"] {display:none !important;}
 
 /* Hide the bottom-right viewer badge (includes “Manage app”) */
 a[title="Manage app"],
