@@ -6,19 +6,21 @@ import altair as alt
 from datetime import datetime, date
 from WaitingListDataLoader import WaitingListDataLoaderClass,SupabaseDBClient
 
+
 HIDE_UI = """
 <style>
 /* Hide hamburger menu and footer */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 
-/* Optional: hide Streamlit header bar */
+/* Hide Streamlit header bar */
 header {visibility: hidden;}
 
-/* Hide deploy/edit toolbar/buttons on Cloud (selectors used by Streamlit) */
+/* Hide Cloud toolbar: Deploy/Edit/Manage App */
 .stDeployButton, .stAppDeployButton,
 [data-testid="stToolbar"], [data-testid="Toolbar"],
-button[kind="header"] {display: none !important;}
+button[kind="header"], 
+a[title="Manage app"] {display: none !important;}
 </style>
 """
 st.markdown(HIDE_UI, unsafe_allow_html=True)
