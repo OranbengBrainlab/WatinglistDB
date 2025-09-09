@@ -435,7 +435,7 @@ elif sidebar_choice == "➕ הוספת משתקם":
     q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=1, horizontal=True)
     q4 = st.radio("דוח רפואי", ["כן", "לא"], index=1, horizontal=True)
     q5 = st.radio("צילום תעודת זהות", ["כן", "לא"], index=1, horizontal=True)
-    comments = st.text_area("הערות נוספות", max_chars=200)
+    comments = st.text_area("הערות נוספות", max_chars=600)
     מקרה_דחוף = st.checkbox("?מקרה דחוף", value=False)
     # Show checkmark if all answers are 'כן' (immediately after questions)
     show_check = all([q1 == "כן", q2 == "כן", q3 == "כן", q4 == "כן", q5 == "כן"])
@@ -520,7 +520,7 @@ elif sidebar_choice == "📝 עריכת משתקם":
             new_q3 = st.radio("דוח פסיכוסוציאלי", ["כן", "לא"], index=0 if selected_person.get("דוח פסיכוסוציאלי") == "כן" else 1, horizontal=True)
             new_q4 = st.radio("דוח רפואי", ["כן", "לא"], index=0 if selected_person.get("דוח רפואי") == "כן" else 1, horizontal=True)
             new_q5 = st.radio("צילום תז", ["כן", "לא"], index=0 if selected_person.get("צילום תז") == "כן" else 1, horizontal=True)
-            new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""))
+            new_comments = st.text_area("הערות", value=selected_person.get("הערות", ""), max_chars=600)
             new_urgent = st.checkbox("?מקרה דחוף", value=selected_person.get("מקרה דחוף", False))
             if st.button("שמור/י שינויים במשקם"):
                 selected_person["שם מלא"] = new_name
