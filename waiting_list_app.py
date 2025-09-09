@@ -7,30 +7,7 @@ from datetime import datetime, date
 from WaitingListDataLoader import WaitingListDataLoaderClass,SupabaseDBClient
 
 
-st.set_page_config(page_title="My App")
 
-HIDE_UI = """
-<style>
-/* Hide default menu/footer/header */
-#MainMenu, footer, header {visibility: hidden;}
-
-/* Hide Cloud toolbar (Deploy/Edit/… ) */
-.stDeployButton, .stAppDeployButton,
-[data-testid="stToolbar"], [data-testid="Toolbar"],
-button[kind="header"] {display:none !important;}
-
-/* Hide the bottom-right viewer badge (includes “Manage app”) */
-a[title="Manage app"],
-a[aria-label="Manage app"],
-button[aria-label="Manage app"],
-[data-testid="manageAppButton"],
-/* classes are hashed; target by prefix */
-[class^="viewerBadge_"], [class*=" viewerBadge_"],
-/* extra belt-and-suspenders for status widget variants */
-[data-testid="stStatusWidget"] {display:none !important;}
-</style>
-"""
-st.markdown(HIDE_UI, unsafe_allow_html=True)
 # --- Configuration ---
 FACILITIES = ["גוש דן"]
 # Branches per facility
@@ -135,8 +112,40 @@ def serialize_dates(data):
             data[k] = v.strftime("%Y-%m-%d")
     return data
 
+def check_login(username, password):
+    return VALID_USERS.get(username) == password
+
+def show_debug_panel():
+    st.markdown("### 🐛 Debug Information")
+    # Session State Debug
+    with st.expander("📊 Session State", expanded=False):
+        st.write("**Session State Variables:**")
+        for key, value in st.session_state.items():
+            st.write(f"- {key}: {type(value).__name__} = {str(value)[:100]}...")
+    # Data Debug
+    with st.expander("📋 Data Debug", expanded=False):
+        st.write("**Current Waiting Lists Data:**")
+        st.write(st.session_state.get("waiting_lists", {}))
+        st.write(st.session_state.get("waiting_lists2", {}))
+        # Excel debug info
+        excel_path = "Data/waiting_list_gush_dan.xlsx"
+        try:
+            xl = pd.ExcelFile(excel_path)
+            st.write(f"**Excel file loaded:** {excel_path}")
+            st.write(f"**Sheet names:** {xl.sheet_names}")
+            for sheet in xl.sheet_names:
+                st.write(f"**Sample from sheet '{sheet}':**")
+                df = xl.parse(sheet)
+                st.write(df.head())
+        except Exception as e:
+            st.write(f"Excel debug error: {e}")
+    # Module Status Debug
+    with st.expander("🔧 Module Status", expanded=False):
+        st.write("- Streamlit: Available")
 # --- Streamlit UI ---
 
+
+# --- Hide Streamlit UI Elements ---
 
 st.set_page_config(page_title="Waiting List Manager", layout="centered")
 
@@ -184,39 +193,10 @@ VALID_USERS = {
     "test": "test"
 }
 
-def check_login(username, password):
-    return VALID_USERS.get(username) == password
-
-# Sidebar navigation
 
 
-def show_debug_panel():
-    st.markdown("### 🐛 Debug Information")
-    # Session State Debug
-    with st.expander("📊 Session State", expanded=False):
-        st.write("**Session State Variables:**")
-        for key, value in st.session_state.items():
-            st.write(f"- {key}: {type(value).__name__} = {str(value)[:100]}...")
-    # Data Debug
-    with st.expander("📋 Data Debug", expanded=False):
-        st.write("**Current Waiting Lists Data:**")
-        st.write(st.session_state.get("waiting_lists", {}))
-        st.write(st.session_state.get("waiting_lists2", {}))
-        # Excel debug info
-        excel_path = "Data/waiting_list_gush_dan.xlsx"
-        try:
-            xl = pd.ExcelFile(excel_path)
-            st.write(f"**Excel file loaded:** {excel_path}")
-            st.write(f"**Sheet names:** {xl.sheet_names}")
-            for sheet in xl.sheet_names:
-                st.write(f"**Sample from sheet '{sheet}':**")
-                df = xl.parse(sheet)
-                st.write(df.head())
-        except Exception as e:
-            st.write(f"Excel debug error: {e}")
-    # Module Status Debug
-    with st.expander("🔧 Module Status", expanded=False):
-        st.write("- Streamlit: Available")
+
+
 
 
 # Check login status
@@ -225,7 +205,6 @@ logged_in = st.session_state.get("logged_in_user")
 with st.sidebar:
     st.image("Images/Logo.jpg", width=720)
     st.markdown('---')
-
     sidebar_choice = st.radio(
         "",
         ["🏠 דף בית", "📋 רשימת המתנה", "➕ הוספת משתקם", "📝 עריכת משתקם", "✅ מתקבלים", "📊 סטטיסטיקה ודוחות"],
