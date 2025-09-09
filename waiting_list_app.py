@@ -146,7 +146,25 @@ def show_debug_panel():
 
 
 # --- Hide Streamlit UI Elements ---
+HIDE_UI = """
+<style>
+/* Hide default menu/footer/header */
+#MainMenu {visibility: hidden;}
 
+
+
+/* Hide the bottom-right viewer badge (includes “Manage app”) */
+a[title="Manage app"],
+a[aria-label="Manage app"],
+button[aria-label="Manage app"],
+[data-testid="manageAppButton"],
+/* classes are hashed; target by prefix */
+[class^="viewerBadge_"], [class*=" viewerBadge_"],
+/* extra belt-and-suspenders for status widget variants */
+[data-testid="stStatusWidget"] {display:none !important;}
+</style>
+"""
+st.markdown(HIDE_UI, unsafe_allow_html=True)
 st.set_page_config(page_title="Waiting List Manager", layout="centered")
 
 
