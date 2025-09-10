@@ -212,17 +212,11 @@ VALID_USERS = {
     "test": "test"
 }
 
-
-
-
-
-
-
 # Check login status
 logged_in = st.session_state.get("logged_in_user")
 
 with st.sidebar:
-    st.image("Images/Logo.jpg", width=720)
+    st.image("Images/Logo2.jpg", width=720)
     st.markdown('---')
     sidebar_choice = st.radio(
         "",
@@ -232,7 +226,7 @@ with st.sidebar:
 
 if sidebar_choice == "🏠 דף בית":
     # Logo moved to sidebar
-    st.markdown("# ידיד תור", unsafe_allow_html=True)
+    st.markdown("# תור טק", unsafe_allow_html=True)
     st.markdown("### ברוכים הבאים לאפליקציית ניהול התורים של ידיד נפש", unsafe_allow_html=True)
     st.markdown("---")
     st.subheader("כניסה")
@@ -403,7 +397,6 @@ elif sidebar_choice == "📋 רשימת המתנה":
     else:
         st.info("No one is currently on the waiting list.")
     # Save Changes button for Gush_Dan branches
-
 
 elif sidebar_choice == "➕ הוספת משתקם":
 
