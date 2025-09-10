@@ -314,86 +314,105 @@ elif sidebar_choice == "📋 רשימת המתנה":
             st.dataframe(styled_df)
             st.markdown('---')
             st.subheader('תראה את הכתובת על המפה')
-            addresses = [a for a in df['כתובת'] if a]
-            selected_address = st.selectbox('בחר/י כתובת להציג על המפה', addresses)
-            if st.button('הצג/י על המפה'):
-                map_url = f"https://www.google.com/maps/search/{selected_address.replace(' ', '+')}"
-                st.markdown(f"[Open in Google Maps]({map_url})", unsafe_allow_html=True)
+            
+            person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+            selected_person_name = st.selectbox("בחר/י משתקם להצגה", person_names, key="accepted_filter_date", index=None, placeholder="בחר/י משתקם")
+            if selected_person_name is not None:
+                for p in waiting_list:
+                    if str(p.get("שם מלא", "")) == selected_person_name:
+                        selected_person = p
+                        break
+                selected_address = st.text_input("כתובת", value=selected_person.get("כתובת", ""),disabled=True)
+            # addresses = [a for a in df['כתובת'] if a]
+            # selected_address = st.selectbox('בחר/י כתובת להציג על המפה', addresses)
+                if st.button('הצג/י על המפה'):
+                    map_url = f"https://www.google.com/maps/search/{selected_address.replace(' ', '+')}"
+                    st.markdown(f"[Open in Google Maps]({map_url})", unsafe_allow_html=True)
         else:
             st.dataframe(styled_df)
             # --- Shift person to accepted list ---
         st.markdown("### העבר/י משתקם לרשימת המתקבלים")
         if len(df) > 0:
             person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
-            selected_person = st.selectbox("בחר/י משתקם להעברה לרשימת המתקבלים", person_names, key="move_to_accepted")
+            selected_person = st.selectbox("בחר/י משתקם להעברה לרשימת המתקבלים", person_names, key="move_to_accepted", index=None, placeholder="בחר/י משתקם")
             target_branches = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
-            target_branch = st.selectbox("בחר/י סניף יעד לרשימת המתקבלים", target_branches, key="move_to_accepted_branch")
+            target_branch = st.selectbox("בחר/י סניף יעד לרשימת המתקבלים", target_branches, key="move_to_accepted_branch", index=None, placeholder="בחר/י סניף")
             if st.button("✅ העבר/י לרשימת המתקבלים"):
-                # Remove from WaitingList DB and add to AcceptedList DB
-                original_branch = None
-                person_to_move = None
-                if branch == "הכל":
-                    for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
-                        for i, p in enumerate(data_store[facility][b]):
+                if selected_person == None or target_branch == None:
+                    if selected_person == None:
+                        st.info("לא נמצא משתקם להחזרה.")
+                    elif target_branch == None:
+                        st.info("נא לבחור סניף יעד.")
+                
+                else:
+                    # Remove from WaitingList DB and add to AcceptedList DB
+                    original_branch = None
+                    person_to_move = None
+                    if branch == "הכל":
+                        for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
+                            for i, p in enumerate(data_store[facility][b]):
+                                p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                                if p_name == selected_person:
+                                    person_to_move = data_store[facility][b][i]
+                                    original_branch = b
+                                    break
+                            if original_branch:
+                                break
+                    else:
+                        for i, p in enumerate(waiting_list):
                             p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
                             if p_name == selected_person:
-                                person_to_move = data_store[facility][b][i]
-                                original_branch = b
+                                person_to_move = waiting_list[i]
+                                original_branch = branch
                                 break
-                        if original_branch:
-                            break
-                else:
-                    for i, p in enumerate(waiting_list):
-                        p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
-                        if p_name == selected_person:
-                            person_to_move = waiting_list[i]
-                            original_branch = branch
-                            break
-                if person_to_move:
-                    if not isinstance(person_to_move, dict):
-                        person_to_move = {"שם מלא": str(person_to_move)}
-                    accepted_person = {
-                        "שם מלא": person_to_move.get("שם מלא", ""),
-                        "תאריך המתנה": person_to_move.get("תאריך", ""),
-                        "תאריך קבלה": datetime.today().strftime("%Y-%m-%d"),
-                        "כתובת": person_to_move.get("כתובת", ""),
-                        "גורם מפנה": person_to_move.get("גורם מפנה", ""),
-                        "סניף מקורי": f"{original_branch if original_branch else ''}",
-                        "אישור ועדה": person_to_move.get("אישור ועדה", ""),
-                        "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
-                        "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
-                        "דוח רפואי": person_to_move.get("דוח רפואי", ""),
-                        "צילום תז": person_to_move.get("צילום תז", ""),
-                        "הערות": person_to_move.get("הערות", ""),
-                        # New for DB ONLY
-                        "סניף": target_branch,
-                        "מרחב": facility
-                    }
-                    # Ensure 'מקרה דחוף' is boolean for Supabase
-                    accepted_person["מקרה דחוף"] = True if person_to_move.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
-                    # Add to AcceptedList DB
-                    DBloader.add_person_to_accepted_list(accepted_person)
+                    if person_to_move:
+                        if not isinstance(person_to_move, dict):
+                            person_to_move = {"שם מלא": str(person_to_move)}
+                        accepted_person = {
+                            "שם מלא": person_to_move.get("שם מלא", ""),
+                            "תאריך המתנה": person_to_move.get("תאריך", ""),
+                            "תאריך קבלה": datetime.today().strftime("%Y-%m-%d"),
+                            "כתובת": person_to_move.get("כתובת", ""),
+                            "גורם מפנה": person_to_move.get("גורם מפנה", ""),
+                            "סניף מקורי": f"{original_branch if original_branch else ''}",
+                            "אישור ועדה": person_to_move.get("אישור ועדה", ""),
+                            "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
+                            "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
+                            "דוח רפואי": person_to_move.get("דוח רפואי", ""),
+                            "צילום תז": person_to_move.get("צילום תז", ""),
+                            "הערות": person_to_move.get("הערות", ""),
+                            # New for DB ONLY
+                            "סניף": target_branch,
+                            "מרחב": facility
+                        }
+                        # Ensure 'מקרה דחוף' is boolean for Supabase
+                        accepted_person["מקרה דחוף"] = True if person_to_move.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
+                        # Add to AcceptedList DB
+                        DBloader.add_person_to_accepted_list(accepted_person)
 
-                    # Remove from WaitingList DB
-                    DBloader.remove_person_from_waiting_list(selected_person)
-                    st.success(f"{selected_person} הועבר/ה לרשימת המתקבלים בסניף {target_branch}!")
-                    st.toast("המשתקם הועבר בהצלחה!", icon="✅")
-                    st.rerun()
+                        # Remove from WaitingList DB
+                        DBloader.remove_person_from_waiting_list(selected_person)
+                        st.success(f"{selected_person} הועבר/ה לרשימת המתקבלים בסניף {target_branch}!")
+                        st.toast("המשתקם הועבר בהצלחה!", icon="✅")
+                        st.rerun()
         # Delete person functionality
         st.markdown("---")
         st.markdown("### להוציא משתקם מרשימת ההמתנה")
         if len(df) > 0:
             person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
-            selected_person = st.selectbox("בחר/י משתקם להסרה", person_names)
+            selected_person = st.selectbox("בחר/י משתקם להסרה", person_names, index=None, placeholder="בחר/י משתקם")
             if st.button("❌ להסיר משתקם"):
-                # Remove first matching person
-                for i, p in enumerate(waiting_list):
-                    if str(p.get("שם מלא", "")) == selected_person:
-                        DBloader.remove_person_from_waiting_list(selected_person)
-                        st.success(f"משתקם {selected_person} הוסר מרשימת ההמתנה.")
-                        st.toast("המשתקם הוסר בהצלחה!", icon="✅")
-                        st.rerun()
-                        break
+                if selected_person == None:
+                    st.info("לא נמצא משתקם להסרה.")
+                else:
+                    # Remove first matching person
+                    for i, p in enumerate(waiting_list):
+                        if str(p.get("שם מלא", "")) == selected_person:
+                            DBloader.remove_person_from_waiting_list(selected_person)
+                            st.success(f"משתקם {selected_person} הוסר מרשימת ההמתנה.")
+                            st.toast("המשתקם הוסר בהצלחה!", icon="✅")
+                            st.rerun()
+                        
     else:
         st.info("No one is currently on the waiting list.")
     # Save Changes button for Gush_Dan branches
@@ -410,7 +429,7 @@ elif sidebar_choice == "➕ הוספת משתקם":
     # Questionnaire inputs (outside the form for immediate checkmark update)
     שם_מלא = st.text_input("הוסף/י את שם המשתקם", max_chars=50)
     תאריך = st.date_input("בחר/י תאריך הוספה", value=None)
-    סטטוס = st.selectbox("בחר/י סטטוס", ["חדש", "ממשיך טיפול"], index=0)
+    סטטוס = st.selectbox("בחר/י סטטוס", ["חדש", "ממשיך טיפול"], index=None, placeholder="בחר/י סטטוס")
     כתובת = st.text_input("הוסף/י כתובת", max_chars=100)
     גורם_מפנה = st.text_input("הוסף/י גורם מפנה", max_chars=100)
     st.markdown("**:בבקשה תמלא/י את השאלון הבא**")
@@ -557,19 +576,17 @@ elif sidebar_choice == "✅ מתקבלים":
     with filter_cols[1]:
         filter_date = st.date_input("📅 הצג/י ממתינים מתאריך", value=None, key="accepted_filter_date")
 
-
-
     # Get all people for selected branch/facility
     if branch == "הכל":
         all_people = []
         for b in FACILITY_BRANCHES[facility]:
             if b != "הכל":
                 all_people.extend(get_waitlist(data_store, facility, b))
-        waiting_list = all_people
+        accepted_list = all_people
     else:
-        waiting_list = get_waitlist(data_store, facility, branch)
+        accepted_list = get_waitlist(data_store, facility, branch)
     # --- Apply Filters ---
-    filtered_list = waiting_list
+    filtered_list = accepted_list
     if search_name:
         filtered_list = [p for p in filtered_list if search_name.strip() in str(p.get("שם מלא", ""))]
     if filter_date:
@@ -599,58 +616,85 @@ elif sidebar_choice == "✅ מתקבלים":
         # --- Move person back to waiting list ---
         st.markdown("---")
         st.markdown("### החזר/י משתקם לרשימת ההמתנה")
-        person_names = [str(p.get("שם מלא", "")) for p in waiting_list]
+        person_names = [str(p.get("שם מלא", "")) for p in accepted_list]
         if person_names:
-            selected_person = st.selectbox("בחר/י משתקם להחזרה לרשימת ההמתנה", person_names, key="move_to_waiting")
+            selected_person = st.selectbox("בחר/י משתקם להחזרה לרשימת ההמתנה", person_names, key="move_to_waiting", index=None, placeholder="בחר/י משתקם")
             target_branches = [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]
-            target_branch = st.selectbox("בחר/י סניף יעד לרשימת ההמתנה", target_branches, key="move_to_waiting_branch")
+            target_branch = st.selectbox("בחר/י סניף יעד לרשימת ההמתנה", target_branches, key="move_to_waiting_branch", index=None, placeholder="בחר/י סניף")
             if st.button("📋 החזר/י לרשימת המתנה"):
-                # Remove from accepted list
-                person_to_move = None
-                if branch == "הכל":
-                    # Search all branches except 'הכל' for the selected person
-                    for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
-                        for i, p in enumerate(data_store[facility][b]):
+                if selected_person == None or target_branch == None:
+                    if selected_person == None:
+                        st.info("לא נמצא משתקם להחזרה.")
+                    elif target_branch == None:
+                        st.info("נא לבחור סניף יעד.")
+                else:
+                    # Remove from accepted list
+                    person_to_move = None
+                    if branch == "הכל":
+                        # Search all branches except 'הכל' for the selected person
+                        for b in [b for b in FACILITY_BRANCHES[facility] if b != "הכל"]:
+                            for i, p in enumerate(data_store[facility][b]):
+                                p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
+                                if p_name == selected_person:
+                                    person_to_move = data_store[facility][b].pop(i)
+                                    break
+                            if person_to_move:
+                                break
+                    else:
+                        for i, p in enumerate(accepted_list):
                             p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
                             if p_name == selected_person:
-                                person_to_move = data_store[facility][b].pop(i)
+                                person_to_move = accepted_list.pop(i)
                                 break
-                        if person_to_move:
-                            break
+                    if person_to_move:
+                        # Prepare person dict for waiting list
+                        waiting_person = {
+                            "שם מלא": person_to_move.get("שם מלא", ""),
+                            "תאריך": person_to_move.get("תאריך המתנה", person_to_move.get("תאריך", "")),
+                            "כתובת": person_to_move.get("כתובת", ""),
+                            "גורם מפנה": person_to_move.get("גורם מפנה", ""),
+                            "אישור ועדה": person_to_move.get("אישור ועדה", ""),
+                            "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
+                            "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
+                            "דוח רפואי": person_to_move.get("דוח רפואי", ""),
+                            "צילום תז": person_to_move.get("צילום תז", ""),
+                            "הערות": person_to_move.get("הערות", ""),
+                            # "מקרה דחוף": person_to_move.get("מקרה דחוף", False),
+                            # New for DB ONLY
+                            "סניף": target_branch,
+                            "מרחב": facility,
+                            "סטטוס": person_to_move.get("סטטוס", "חדש")
+                        }
+                        # Ensure 'מקרה דחוף' is boolean for Supabase
+                        waiting_person["מקרה דחוף"] = True if waiting_person.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
+                        DBloader.add_person(waiting_person)
+                        DBloader.remove_person_from_accepted_list(selected_person)
+                        st.success(f"{selected_person} הוחזר/ה לרשימת ההמתנה בסניף {target_branch}!")
+                        st.toast("המשתקם הוחזר בהצלחה!", icon="✅")
+                        st.rerun()
+            # Option to remove person from accepted list
+            st.markdown("---")
+            st.markdown("### הסר/י משתקם מרשימת המתקבלים")
+            selected_person = st.selectbox("בחר/י משתקם להסרה מרשימת המתקבלים", person_names, key="remove_from_accepted", index=None, placeholder="בחר/י משתקם")
+            if st.button("❌ להסיר משתקם מרשימת המתקבלים"):
+                if selected_person == None:
+                    st.info("לא נמצא משתקם להסרה.")
                 else:
-                    for i, p in enumerate(waiting_list):
-                        p_name = str(p.get("שם מלא", "")) if isinstance(p, dict) else str(p)
-                        if p_name == selected_person:
-                            person_to_move = waiting_list.pop(i)
+                    # Remove first matching person from accepted list
+                    removed = False
+                    for i, p in enumerate(accepted_list):
+                        if str(p.get("שם מלא", "")) == selected_person:
+                            DBloader.remove_person_from_accepted_list(selected_person)
+                            st.success(f"משתקם {selected_person} הוסר מרשימת המתקבלים.")
+                            st.toast("המשתקם הוסר בהצלחה!", icon="✅")
+                            st.rerun()
+                            removed = True
                             break
-                if person_to_move:
-                    # Prepare person dict for waiting list
-                    waiting_person = {
-                        "שם מלא": person_to_move.get("שם מלא", ""),
-                        "תאריך": person_to_move.get("תאריך המתנה", person_to_move.get("תאריך", "")),
-                        "כתובת": person_to_move.get("כתובת", ""),
-                        "גורם מפנה": person_to_move.get("גורם מפנה", ""),
-                        "אישור ועדה": person_to_move.get("אישור ועדה", ""),
-                        "דוח פסיכיאטרי": person_to_move.get("דוח פסיכיאטרי", ""),
-                        "דוח פסיכוסוציאלי": person_to_move.get("דוח פסיכוסוציאלי", ""),
-                        "דוח רפואי": person_to_move.get("דוח רפואי", ""),
-                        "צילום תז": person_to_move.get("צילום תז", ""),
-                        "הערות": person_to_move.get("הערות", ""),
-                        # "מקרה דחוף": person_to_move.get("מקרה דחוף", False),
-                        # New for DB ONLY
-                        "סניף": target_branch,
-                        "מרחב": facility,
-                        "סטטוס": person_to_move.get("סטטוס", "חדש")
-                    }
-                    # Ensure 'מקרה דחוף' is boolean for Supabase
-                    waiting_person["מקרה דחוף"] = True if waiting_person.get("מקרה דחוף") in [True, "כן", "true", "True", 1] else False
-                    DBloader.add_person(waiting_person)
-                    DBloader.remove_person_from_accepted_list(selected_person)
-                    st.success(f"{selected_person} הוחזר/ה לרשימת ההמתנה בסניף {target_branch}!")
-                    st.toast("המשתקם הוחזר בהצלחה!", icon="✅")
-                    st.rerun()
+                    if not removed:
+                        st.warning("לא נמצא משתקם להסרה.")
     else:
         st.info("No one is currently on the accepted list.")
+
 
 elif sidebar_choice == "📊 סטטיסטיקה ודוחות":
     st.markdown("## 📊 סטטיסטיקה ודוחות")
