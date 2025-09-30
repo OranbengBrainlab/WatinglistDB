@@ -205,11 +205,14 @@ elif DataType == "DB":
 
 # --- User Authentication ---
 VALID_USERS = {
-    "admin": "admin",
-    "user1": "pass1",
-    "Tal": "Tal",
-    "user2": "pass2",
-    "test": "test"
+    "פנינהמולר": "admin",
+    "רנתה": "pass1",
+    "Noazi": "Tal",
+    "annaziv": "pass2",
+    "036029106": "test",
+    "alina": "test",
+    "lizl ": "test",
+    "טלבןגל": "test"
 }
 
 # Check login status
