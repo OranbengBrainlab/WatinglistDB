@@ -212,7 +212,7 @@ VALID_USERS = {
     "036029106": "test",
     "alina": "test",
     "lizl ": "test",
-    "טלבןגל": "test"
+    "טלבןגל": "טל123456!"
 }
 
 # Check login status
